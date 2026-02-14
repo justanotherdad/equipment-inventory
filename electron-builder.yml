@@ -1,0 +1,39 @@
+appId: com.equipmentinventory.app
+productName: Equipment Inventory
+directories:
+  output: Installers
+files:
+  - dist/**/*
+  - package.json
+
+# Mac: PKG = installer, DMG = drag-to-Applications, zip = portable (extract and run from anywhere)
+mac:
+  category: public.app-category.business
+  target:
+    - pkg
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+# PKG: scripts removed - electron-builder has a known bug (#8063) where pkg scripts
+# can cause "The installation failed" on macOS. Use DMG for drag-to-Applications instead.
+# pkg:
+#   scripts: pkg-scripts
+
+# Windows: One-click installer - run Setup.exe, installs with shortcuts, launches app
+# defaultArch: x64 ensures compatibility with typical Intel/AMD PCs (build on Mac defaults to arm64)
+# portable: .exe that runs without install (for users whose antivirus quarantines the NSIS installer)
+win:
+  target:
+    - nsis
+    - portable
+  defaultArch: x64
+
+nsis:
+  oneClick: true
+  perMachine: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  uninstallDisplayName: Equipment Inventory

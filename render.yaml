@@ -1,0 +1,20 @@
+# Render Blueprint - Equipment Inventory
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: equipment-inventory
+    runtime: node
+
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_PATH
+        sync: false  # Set manually after adding disk (see steps below)
+
+    # Persistent disk for database + PDF storage (add in Render dashboard)
+    # Mount path: /data
+    # Then set DATA_PATH=/data in Environment
