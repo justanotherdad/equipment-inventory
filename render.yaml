@@ -1,5 +1,6 @@
-# Render Blueprint - Equipment Inventory
+# Render Blueprint - Equipment Inventory (Supabase)
 # https://render.com/docs/blueprint-spec
+# Add SUPABASE_URL and SUPABASE_SERVICE_KEY in Render dashboard
 
 services:
   - type: web
@@ -12,9 +13,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_PATH
-        sync: false  # Set manually after adding disk (see steps below)
-
-    # Persistent disk for database + PDF storage (add in Render dashboard)
-    # Mount path: /data
-    # Then set DATA_PATH=/data in Environment
+      - key: SUPABASE_URL
+        sync: false  # Set in Render dashboard
+      - key: SUPABASE_SERVICE_KEY
+        sync: false  # Set in Render dashboard

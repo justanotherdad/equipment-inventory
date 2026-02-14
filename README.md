@@ -7,11 +7,15 @@ A web application for tracking equipment inventory, calibrations, sign-outs, and
 - **Equipment Management**: Track make, model, serial number, and calibration dates for each item
 - **Equipment Types**: Configure categories (Temperature Logger, Laptop, etc.) with optional calibration requirements and frequency
 - **Equipment Number**: Optional ID for items without serial numbers—used for barcode scanning
-- **Sign-out Tracking**: Record who signed equipment out, when, for what purpose, and which systems/equipment it was used on
-- **Barcode Scanner**: Use a USB hand scanner to quickly sign out or check in equipment by scanning serial number or equipment number
+- **Equipment Requests**: Users request equipment with name, email, phone, building, equipment to test, and dates. Equipment managers approve or reject with comments. Approved requests create sign-out records and appear in equipment history.
+- **Request Queue**: Equipment managers review pending requests, approve (creates sign-out) or reject (with comment)
+- **Sign-out Tracking**: Record who signed equipment out, when, for what purpose, building, equipment tested, and dates
+- **Barcode Scanner**: Use a USB hand scanner to quickly sign out or check in equipment
 - **Calibration Status**: View all equipment with calibration due dates—filter by overdue, due soon (30 days), OK, or N/A
 - **Calibration Records**: Upload PDF scans of calibration certificates to each equipment item
 - **Usage History**: See which systems or equipment each item was used to map/test during sign-outs
+- **Mobile Friendly**: Responsive layout with collapsible sidebar on small screens
+- **Admin Panel** (inactive): Placeholder for future multi-site access control, user/equipment manager/admin roles
 
 ## Requirements
 
@@ -48,8 +52,10 @@ You can click **Open** next to any record to view the PDF in a new browser tab.
 
 ## Data Storage
 
-- **Database**: SQLite file at `./data/equipment-inventory.db` (in the project folder)
-- **Calibration PDFs**: Stored in `./data/calibration-records/`
+- **Database**: Supabase (PostgreSQL)
+- **Calibration PDFs**: Supabase Storage bucket `calibration-records`
+
+See `DEPLOY-RENDER.md` for Supabase setup and deployment to Render's free tier.
 
 ## Default Equipment Types
 

@@ -24,6 +24,10 @@ interface SignOut {
   signed_in_by: string | null;
   signed_in_at: string | null;
   purpose: string | null;
+  building?: string | null;
+  equipment_number_to_test?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
 }
 
 interface Usage {
@@ -227,10 +231,11 @@ export default function EquipmentDetail() {
                 <tr>
                   <th>Signed Out</th>
                   <th>By</th>
+                  <th>Building</th>
+                  <th>Equipment to Test</th>
+                  <th>Dates</th>
                   <th>Signed In</th>
-                  <th>By</th>
-                  <th>Purpose</th>
-                  <th>Used On</th>
+                  <th>Purpose / Used On</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,11 +243,19 @@ export default function EquipmentDetail() {
                   <tr key={s.id}>
                     <td>{format(new Date(s.signed_out_at), 'MMM d, yyyy HH:mm')}</td>
                     <td>{s.signed_out_by}</td>
-                    <td>{s.signed_in_at ? format(new Date(s.signed_in_at), 'MMM d, yyyy HH:mm') : '—'}</td>
-                    <td>{s.signed_in_by ?? '—'}</td>
-                    <td>{s.purpose ?? '—'}</td>
+                    <td>{s.building ?? '—'}</td>
+                    <td>{s.equipment_number_to_test ?? '—'}</td>
                     <td>
-                      {(usagesBySignOut[s.id] ?? []).map((u) => u.system_equipment).join(', ') || '—'}
+                      {s.date_from && s.date_to ? `${s.date_from} to ${s.date_to}` : '—'}
+                    </td>
+                    <td>{s.signed_in_at ? format(new Date(s.signed_in_at), 'MMM d, yyyy HH:mm') : '—'}</td>
+                    <td>
+                      {s.purpose ?? '—'}
+                      {((usagesBySignOut[s.id] ?? []).length > 0) && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                          Used on: {(usagesBySignOut[s.id] ?? []).map((u) => u.system_equipment).join(', ')}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

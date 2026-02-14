@@ -64,4 +64,22 @@ export const api = {
       request('/api/usage', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request(`/api/usage/${id}`, { method: 'DELETE' }),
   },
+  equipmentRequests: {
+    getAll: (status?: 'pending' | 'approved' | 'rejected') =>
+      request(`/api/equipment-requests${status ? `?status=${status}` : ''}`),
+    create: (data: {
+      equipment_id: number;
+      requester_name: string;
+      requester_email: string;
+      requester_phone: string;
+      building: string;
+      equipment_number_to_test: string;
+      date_from: string;
+      date_to: string;
+    }) => request('/api/equipment-requests', { method: 'POST', body: JSON.stringify(data) }),
+    approve: (id: number, reviewedBy: string) =>
+      request(`/api/equipment-requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ reviewed_by: reviewedBy }) }),
+    reject: (id: number, reviewedBy: string, comment?: string) =>
+      request(`/api/equipment-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ reviewed_by: reviewedBy, comment }) }),
+  },
 };

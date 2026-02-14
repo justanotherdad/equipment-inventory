@@ -66,7 +66,7 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
         signed_out_by: signedOutBy.trim(),
         purpose: purpose.trim() || undefined,
       });
-      const signOutId = (result as { lastInsertRowid: number }).lastInsertRowid;
+      const signOutId = (result as { id: number }).id;
       for (const sys of usageItems) {
         const trimmed = sys.trim();
         if (trimmed) {
