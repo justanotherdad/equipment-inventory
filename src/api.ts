@@ -46,6 +46,7 @@ export const api = {
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
   },
   calibrationRecords: {
+    getAll: () => request('/api/calibration-records'),
     getByEquipment: (equipmentId: number) => request(`/api/calibration-records/equipment/${equipmentId}`),
     add: async (equipmentId: number, file: File) => {
       const form = new FormData();

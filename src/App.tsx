@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import './App.css';
-import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import EquipmentList from './pages/EquipmentList';
 import EquipmentDetail from './pages/EquipmentDetail';
@@ -11,6 +11,7 @@ import EquipmentTypes from './pages/EquipmentTypes';
 import RequestEquipment from './pages/RequestEquipment';
 import RequestQueue from './pages/RequestQueue';
 import Admin from './pages/Admin';
+import CalibrationDownloads from './pages/CalibrationDownloads';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/requests', icon: Inbox, label: 'Request Queue' },
   { to: '/sign-outs', icon: ClipboardList, label: 'Sign-outs' },
   { to: '/calibration', icon: CalendarCheck, label: 'Calibration Status' },
+  { to: '/calibration-downloads', icon: Download, label: 'Download Cal Certs' },
   { to: '/settings', icon: Settings, label: 'Equipment Types' },
   { to: '/admin', icon: Shield, label: 'Admin' },
 ];
@@ -64,6 +66,7 @@ export default function App() {
             <Route path="/requests" element={<RequestQueue />} />
             <Route path="/sign-outs" element={<SignOuts />} />
             <Route path="/calibration" element={<CalibrationStatus />} />
+            <Route path="/calibration-downloads" element={<CalibrationDownloads />} />
             <Route path="/settings" element={<EquipmentTypes />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>

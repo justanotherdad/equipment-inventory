@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, addMonths } from 'date-fns';
+import { FileText } from 'lucide-react';
 import { api } from '../api';
 
 interface EquipmentType {
@@ -27,6 +28,7 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
     next_calibration_due: '',
     notes: '',
   });
+  const [calibrationFile, setCalibrationFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,8 +93,15 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
       };
       if (equipmentId) {
         await api.equipment.update(equipmentId, payload);
+        if (calibrationFile) {
+          await api.calibrationRecords.add(equipmentId, calibrationFile);
+        }
       } else {
-        await api.equipment.create(payload);
+        const result = await api.equipment.create(payload) as { id: number };
+        const newId = result?.id;
+        if (newId && calibrationFile) {
+          await api.calibrationRecords.add(newId, calibrationFile);
+        }
       }
       onSaved();
     } catch (err) {
@@ -167,6 +176,23 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
               </div>
             </div>
           )}
+          <div className="form-group">
+            <label>
+              <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+              Calibration Certificate (optional)
+            </label>
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setCalibrationFile(e.target.files?.[0] ?? null)}
+              style={{ padding: '0.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+            />
+            {calibrationFile && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                {calibrationFile.name}
+              </p>
+            )}
+          </div>
           <div className="form-group">
             <label>Notes</label>
             <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />

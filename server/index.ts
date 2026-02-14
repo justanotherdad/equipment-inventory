@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import archiver from 'archiver';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database';
 
@@ -110,8 +111,8 @@ app.get('/api/equipment/:id', async (req, res) => {
 
 app.post('/api/equipment', async (req, res) => {
   try {
-    await db.createEquipment(req.body);
-    res.status(201).json({ ok: true });
+    const id = await db.createEquipment(req.body);
+    res.status(201).json({ id });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
@@ -278,6 +279,47 @@ app.delete('/api/calibration-records/:id', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
+});
+
+app.get('/api/calibration-records', async (_req, res) => {
+  try {
+    const records = await db.getAllCalibrationRecords();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/calibration-records/download-batch', async (req, res) => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array required with at least one id' });
+  }
+  const records = await Promise.all(ids.map((id) => db.getCalibrationRecordById(id)));
+  const valid = records.filter((r): r is NonNullable<typeof r> => r != null);
+  if (valid.length === 0) return res.status(404).json({ error: 'No valid records found' });
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="calibration-certificates-${Date.now()}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', () => res.end());
+  archive.pipe(res);
+
+  for (const rec of valid) {
+    try {
+      const { data, error } = await supabase.storage.from(storageBucket).download(rec.storage_path);
+      if (error || !data) continue;
+      const buffer = Buffer.from(await data.arrayBuffer());
+      const safeName = rec.file_name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const zipName = `${rec.equipment_id}_${safeName}`;
+      archive.append(buffer, { name: zipName });
+    } catch {
+      // Skip failed downloads
+    }
+  }
+
+  await archive.finalize();
 });
 
 // Equipment Requests

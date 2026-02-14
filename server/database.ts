@@ -221,18 +221,23 @@ export class Database {
     last_calibration_date?: string | null;
     next_calibration_due?: string | null;
     notes?: string | null;
-  }) {
-    const { error } = await this.supabase.from('equipment').insert({
-      equipment_type_id: data.equipment_type_id,
-      make: data.make,
-      model: data.model,
-      serial_number: data.serial_number,
-      equipment_number: data.equipment_number?.trim() || null,
-      last_calibration_date: data.last_calibration_date ?? null,
-      next_calibration_due: data.next_calibration_due ?? null,
-      notes: data.notes ?? null,
-    });
+  }): Promise<number> {
+    const { data: inserted, error } = await this.supabase
+      .from('equipment')
+      .insert({
+        equipment_type_id: data.equipment_type_id,
+        make: data.make,
+        model: data.model,
+        serial_number: data.serial_number,
+        equipment_number: data.equipment_number?.trim() || null,
+        last_calibration_date: data.last_calibration_date ?? null,
+        next_calibration_due: data.next_calibration_due ?? null,
+        notes: data.notes ?? null,
+      })
+      .select('id')
+      .single();
     if (error) throw error;
+    return inserted?.id ?? 0;
   }
 
   async updateEquipment(id: number, data: Partial<{
@@ -433,6 +438,25 @@ export class Database {
       .order('uploaded_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
+  }
+
+  async getAllCalibrationRecords(): Promise<Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null }>> {
+    const { data, error } = await this.supabase
+      .from('calibration_records')
+      .select('*, equipment(make, model, serial_number, equipment_number)')
+      .order('uploaded_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r: Record<string, unknown>) => {
+      const eq = (r.equipment || {}) as { make?: string; model?: string; serial_number?: string; equipment_number?: string };
+      return {
+        ...r,
+        equipment_make: eq.make,
+        equipment_model: eq.model,
+        equipment_serial: eq.serial_number,
+        equipment_number: eq.equipment_number,
+        equipment: undefined,
+      };
+    }) as Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null }>;
   }
 
   async getCalibrationRecordById(id: number): Promise<CalibrationRecord | undefined> {
