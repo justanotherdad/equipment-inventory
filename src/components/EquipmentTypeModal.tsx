@@ -17,7 +17,7 @@ interface Props {
 export default function EquipmentTypeModal({ typeId, onClose, onSaved }: Props) {
   const [name, setName] = useState('');
   const [requiresCalibration, setRequiresCalibration] = useState(true);
-  const [frequencyMonths, setFrequencyMonths] = useState(12);
+  const [frequencyMonths, setFrequencyMonths] = useState<string>('12');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,13 +28,13 @@ export default function EquipmentTypeModal({ typeId, onClose, onSaved }: Props) 
         if (t) {
           setName(t.name);
           setRequiresCalibration(t.requires_calibration === 1);
-          setFrequencyMonths(t.calibration_frequency_months ?? 12);
+          setFrequencyMonths(t.calibration_frequency_months != null ? String(t.calibration_frequency_months) : '12');
         }
       });
     } else {
       setName('');
       setRequiresCalibration(true);
-      setFrequencyMonths(12);
+      setFrequencyMonths('12');
     }
   }, [typeId]);
 
@@ -46,7 +46,7 @@ export default function EquipmentTypeModal({ typeId, onClose, onSaved }: Props) 
       const payload = {
         name: name.trim(),
         requires_calibration: requiresCalibration,
-        calibration_frequency_months: requiresCalibration ? frequencyMonths : null,
+        calibration_frequency_months: requiresCalibration ? (parseInt(frequencyMonths, 10) || 12) : null,
       };
       if (typeId) {
         await api.equipmentTypes.update(typeId, payload);
@@ -91,7 +91,7 @@ export default function EquipmentTypeModal({ typeId, onClose, onSaved }: Props) 
                 min={1}
                 max={60}
                 value={frequencyMonths}
-                onChange={(e) => setFrequencyMonths(parseInt(e.target.value, 10) || 12)}
+                onChange={(e) => setFrequencyMonths(e.target.value)}
               />
             </div>
           )}
