@@ -183,6 +183,65 @@ export default function RequestQueue() {
           </table>
         </div>
 
+        <div className="mobile-list">
+          {displayList.map((r) => (
+            <div key={r.id} className="mobile-card">
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Requester</span>
+                <span className="mobile-card-value">{r.requester_name}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equipment</span>
+                <span className="mobile-card-value">
+                  <Link to={`/equipment/${r.equipment_id}`} className="link">
+                    {r.equipment_make} {r.equipment_model}
+                  </Link>
+                </span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Building</span>
+                <span className="mobile-card-value">{r.building}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">To Test</span>
+                <span className="mobile-card-value">{r.equipment_number_to_test}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Dates</span>
+                <span className="mobile-card-value">{r.date_from} – {r.date_to}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Status</span>
+                <span className="mobile-card-value">
+                  <span className={`badge badge-${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'due' : 'due-soon'}`}>
+                    {r.status}
+                  </span>
+                </span>
+              </div>
+              {tab === 'pending' && r.status === 'pending' && (
+                <div className="mobile-card-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1 }}
+                    onClick={() => handleApprove(r.id)}
+                    disabled={actingOnId !== null}
+                  >
+                    <Check size={14} /> Approve
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    style={{ flex: 1 }}
+                    onClick={() => handleReject(r.id)}
+                    disabled={actingOnId !== null}
+                  >
+                    <X size={14} /> Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
         {displayList.length === 0 && (
           <div className="empty-state">
             <p>{tab === 'pending' ? 'No pending requests.' : 'No requests yet.'}</p>

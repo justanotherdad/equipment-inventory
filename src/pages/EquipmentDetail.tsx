@@ -225,43 +225,69 @@ export default function EquipmentDetail() {
             <p>No sign-outs recorded for this equipment.</p>
           </div>
         ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Signed Out</th>
-                  <th>By</th>
-                  <th>Building</th>
-                  <th>Equipment to Test</th>
-                  <th>Dates</th>
-                  <th>Signed In</th>
-                  <th>Purpose / Used On</th>
-                </tr>
-              </thead>
-              <tbody>
-                {signOuts.map((s) => (
-                  <tr key={s.id}>
-                    <td>{format(new Date(s.signed_out_at), 'MMM d, yyyy HH:mm')}</td>
-                    <td>{s.signed_out_by}</td>
-                    <td>{s.building ?? '—'}</td>
-                    <td>{s.equipment_number_to_test ?? '—'}</td>
-                    <td>
-                      {s.date_from && s.date_to ? `${s.date_from} to ${s.date_to}` : '—'}
-                    </td>
-                    <td>{s.signed_in_at ? format(new Date(s.signed_in_at), 'MMM d, yyyy HH:mm') : '—'}</td>
-                    <td>
-                      {s.purpose ?? '—'}
-                      {((usagesBySignOut[s.id] ?? []).length > 0) && (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                          Used on: {(usagesBySignOut[s.id] ?? []).map((u) => u.system_equipment).join(', ')}
-                        </div>
-                      )}
-                    </td>
+          <>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Signed Out</th>
+                    <th>By</th>
+                    <th>Building</th>
+                    <th>Equipment to Test</th>
+                    <th>Dates</th>
+                    <th>Signed In</th>
+                    <th>Purpose / Used On</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {signOuts.map((s) => (
+                    <tr key={s.id}>
+                      <td>{format(new Date(s.signed_out_at), 'MMM d, yyyy HH:mm')}</td>
+                      <td>{s.signed_out_by}</td>
+                      <td>{s.building ?? '—'}</td>
+                      <td>{s.equipment_number_to_test ?? '—'}</td>
+                      <td>
+                        {s.date_from && s.date_to ? `${s.date_from} to ${s.date_to}` : '—'}
+                      </td>
+                      <td>{s.signed_in_at ? format(new Date(s.signed_in_at), 'MMM d, yyyy HH:mm') : '—'}</td>
+                      <td>
+                        {s.purpose ?? '—'}
+                        {((usagesBySignOut[s.id] ?? []).length > 0) && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                            Used on: {(usagesBySignOut[s.id] ?? []).map((u) => u.system_equipment).join(', ')}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mobile-list">
+              {signOuts.map((s) => (
+                <div key={s.id} className="mobile-card">
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">By</span>
+                    <span className="mobile-card-value">{s.signed_out_by}</span>
+                  </div>
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Out</span>
+                    <span className="mobile-card-value">{format(new Date(s.signed_out_at), 'MMM d, yyyy')}</span>
+                  </div>
+                  {(s.building || s.equipment_number_to_test) && (
+                    <div className="mobile-card-row">
+                      <span className="mobile-card-label">Building / Test</span>
+                      <span className="mobile-card-value">{[s.building, s.equipment_number_to_test].filter(Boolean).join(' • ')}</span>
+                    </div>
+                  )}
+                  <div className="mobile-card-row">
+                    <span className="mobile-card-label">Purpose</span>
+                    <span className="mobile-card-value">{s.purpose ?? '—'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

@@ -223,6 +223,8 @@
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .form-group input,
@@ -264,6 +266,67 @@
 .table-container {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  .table-container {
+    display: none !important;
+  }
+}
+
+.mobile-list {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-list {
+    display: none !important;
+  }
+}
+
+.mobile-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.mobile-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.mobile-card-row:last-child {
+  margin-bottom: 0;
+}
+
+.mobile-card-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.mobile-card-value {
+  text-align: right;
+  word-break: break-word;
+}
+
+.mobile-card-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
 }
 
 table {
@@ -343,6 +406,8 @@ tr:hover td {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
 .modal {
@@ -351,8 +416,10 @@ tr:hover td {
   border-radius: 12px;
   padding: 1.5rem;
   max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
+  width: 100%;
+  min-width: 0;
+  max-height: calc(100vh - 2rem);
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

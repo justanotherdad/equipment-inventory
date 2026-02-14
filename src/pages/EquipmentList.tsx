@@ -99,6 +99,34 @@ export default function EquipmentList() {
           </table>
         </div>
 
+        <div className="mobile-list">
+          {filtered.map((e) => (
+            <div key={e.id} className="mobile-card">
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equipment</span>
+                <span className="mobile-card-value">{e.make} {e.model}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Type</span>
+                <span className="mobile-card-value">{e.equipment_type_name}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Serial / #</span>
+                <span className="mobile-card-value">{e.equipment_number ? `#${e.equipment_number}` : e.serial_number}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Next Cal</span>
+                <span className="mobile-card-value">{formatDate(e.next_calibration_due)}</span>
+              </div>
+              <div className="mobile-card-actions">
+                <Link to={`/equipment/${e.id}`} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                  View Details
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {filtered.length === 0 && (
           <div className="empty-state">
             <p>{equipment.length === 0 ? 'No equipment yet. Add your first item.' : 'No matches for your search.'}</p>

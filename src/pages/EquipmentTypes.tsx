@@ -82,6 +82,33 @@ export default function EquipmentTypes() {
           </table>
         </div>
 
+        <div className="mobile-list">
+          {types.map((t) => (
+            <div key={t.id} className="mobile-card">
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Name</span>
+                <span className="mobile-card-value">{t.name}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Calibration</span>
+                <span className="mobile-card-value">{t.requires_calibration ? 'Yes' : 'No'}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Frequency</span>
+                <span className="mobile-card-value">{t.calibration_frequency_months ? `Every ${t.calibration_frequency_months} mo` : '—'}</span>
+              </div>
+              <div className="mobile-card-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setEditingId(t.id); setShowModal(true); }}>
+                  <Edit size={14} /> Edit
+                </button>
+                <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => handleDelete(t.id)}>
+                  <Trash2 size={14} /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {types.length === 0 && (
           <div className="empty-state">
             <p>No equipment types. Add one to get started.</p>

@@ -74,13 +74,14 @@ export default function EquipmentTypeModal({ typeId, onClose, onSaved }: Props) 
             <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Temperature Logger" />
           </div>
           <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', flexWrap: 'wrap', wordBreak: 'break-word' }}>
               <input
                 type="checkbox"
                 checked={requiresCalibration}
                 onChange={(e) => setRequiresCalibration(e.target.checked)}
+                style={{ flexShrink: 0 }}
               />
-              Requires recurring calibration
+              <span>Requires recurring calibration</span>
             </label>
           </div>
           {requiresCalibration && (

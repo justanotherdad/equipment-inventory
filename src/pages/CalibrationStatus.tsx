@@ -123,6 +123,34 @@ export default function CalibrationStatus() {
           </table>
         </div>
 
+        <div className="mobile-list">
+          {filtered.map((item) => (
+            <div key={item.id} className="mobile-card">
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Status</span>
+                <span className="mobile-card-value">{statusBadge(item)}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equipment</span>
+                <span className="mobile-card-value">{item.make} {item.model}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Serial #</span>
+                <span className="mobile-card-value">{item.serial_number}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Next Due</span>
+                <span className="mobile-card-value">{item.next_calibration_due ? format(new Date(item.next_calibration_due), 'MMM d, yyyy') : '—'}</span>
+              </div>
+              <div className="mobile-card-actions">
+                <Link to={`/equipment/${item.id}`} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                  View Details
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {filtered.length === 0 && (
           <div className="empty-state">
             <p>{items.length === 0 ? 'No equipment in inventory.' : 'No items match this filter.'}</p>

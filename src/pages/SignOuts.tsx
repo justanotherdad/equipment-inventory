@@ -151,6 +151,46 @@ export default function SignOuts() {
           </table>
         </div>
 
+        <div className="mobile-list">
+          {displayList.map((s) => (
+            <div key={s.id} className="mobile-card">
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equipment</span>
+                <span className="mobile-card-value">
+                  <Link to={`/equipment/${s.equipment_id}`} className="link">
+                    {s.equipment_make} {s.equipment_model}
+                  </Link>
+                </span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">By</span>
+                <span className="mobile-card-value">{s.signed_out_by}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Out</span>
+                <span className="mobile-card-value">{format(new Date(s.signed_out_at), 'MMM d, HH:mm')}</span>
+              </div>
+              {s.purpose && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Purpose</span>
+                  <span className="mobile-card-value">{s.purpose}</span>
+                </div>
+              )}
+              <div className="mobile-card-actions">
+                {!s.signed_in_at ? (
+                  <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setCheckInSignOut(s)}>
+                    <LogIn size={14} /> Check In
+                  </button>
+                ) : (
+                  <Link to={`/equipment/${s.equipment_id}`} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex' }}>
+                    View Equipment
+                  </Link>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
         {displayList.length === 0 && (
           <div className="empty-state">
             <p>{tab === 'active' ? 'No equipment currently signed out.' : 'No sign-out history.'}</p>

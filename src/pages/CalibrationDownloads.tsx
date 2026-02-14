@@ -148,6 +148,43 @@ export default function CalibrationDownloads() {
                 </tbody>
               </table>
             </div>
+            <div className="mobile-list">
+              {records.map((r) => (
+                <div key={r.id} className="mobile-card">
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(r.id)}
+                      onChange={() => toggle(r.id)}
+                      style={{ marginTop: '0.25rem', flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="mobile-card-row">
+                        <span className="mobile-card-label">Equipment</span>
+                        <span className="mobile-card-value">
+                          <Link to={`/equipment/${r.equipment_id}`} className="link">
+                            {r.equipment_make} {r.equipment_model}
+                          </Link>
+                        </span>
+                      </div>
+                      <div className="mobile-card-row">
+                        <span className="mobile-card-label">File</span>
+                        <span className="mobile-card-value" style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{r.file_name}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mobile-card-actions">
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%' }}
+                      onClick={() => handleDownloadOne(r.id)}
+                    >
+                      <FileText size={14} /> Open PDF
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>
