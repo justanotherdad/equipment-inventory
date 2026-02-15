@@ -246,6 +246,15 @@ export class Database {
     if (error) throw error;
   }
 
+  async updateProfile(profileId: number, data: { display_name?: string | null; email?: string; company_id?: number | null }) {
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.display_name !== undefined) payload.display_name = data.display_name;
+    if (data.email !== undefined) payload.email = data.email.toLowerCase();
+    if (data.company_id !== undefined) payload.company_id = data.company_id;
+    const { error } = await this.supabase.from('profiles').update(payload).eq('id', profileId);
+    if (error) throw error;
+  }
+
   async getProfileById(profileId: number): Promise<Profile | undefined> {
     const { data, error } = await this.supabase.from('profiles').select('*').eq('id', profileId).single();
     if (error || !data) return undefined;
@@ -278,7 +287,7 @@ export class Database {
     return data as Record<string, unknown>;
   }
 
-  async updateCompany(id: number, data: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }) {
+  async updateCompany(id: number, data: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null; subscription_level?: number; subscription_active?: boolean }) {
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) payload.name = data.name;
     if (data.contact_name !== undefined) payload.contact_name = data.contact_name;
@@ -289,13 +298,23 @@ export class Database {
     if (data.address_city !== undefined) payload.address_city = data.address_city;
     if (data.address_state !== undefined) payload.address_state = data.address_state;
     if (data.address_zip !== undefined) payload.address_zip = data.address_zip;
+    if (data.subscription_level !== undefined) payload.subscription_level = data.subscription_level;
+    if (data.subscription_active !== undefined) {
+      payload.subscription_active = data.subscription_active;
+      if (data.subscription_active) payload.subscription_activated_at = new Date().toISOString();
+    }
     const { error } = await this.supabase.from('companies').update(payload).eq('id', id);
     if (error) throw error;
   }
 
-  async createCompany(name: string) {
-    const { error } = await this.supabase.from('companies').insert({ name });
+  async createCompany(name: string, contactEmail?: string | null, contactName?: string | null) {
+    const { data, error } = await this.supabase.from('companies').insert({
+      name,
+      contact_email: contactEmail ?? null,
+      contact_name: contactName ?? null,
+    }).select('id').single();
     if (error) throw error;
+    return (data as { id: number })?.id ?? null;
   }
 
   async updateCompanySubscription(companyId: number, subscriptionActive: boolean, subscriptionLevel?: number) {

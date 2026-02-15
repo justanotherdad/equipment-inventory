@@ -3,6 +3,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
   const { signIn, signUp, error, loading, profile } = useAuth();
@@ -68,8 +69,7 @@ export default function Login() {
             autoComplete="email"
             disabled={submitting}
           />
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

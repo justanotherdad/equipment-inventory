@@ -103,7 +103,7 @@ export function AdminTable<T extends Record<string, unknown>>({
           />
         </div>
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="admin-table-wrapper" style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border)' }}>

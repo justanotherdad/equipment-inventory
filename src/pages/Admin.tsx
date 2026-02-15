@@ -4,6 +4,7 @@ import { api } from '../api';
 import { Navigate } from 'react-router-dom';
 import { Users, Building2, FolderTree, CreditCard, Pencil, Trash2 } from 'lucide-react';
 import AccessCheckboxes from '../components/AccessCheckboxes';
+import PasswordInput from '../components/PasswordInput';
 import { AdminTable, AdminTableColumn } from '../components/AdminTable';
 
 type Role = 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
@@ -13,6 +14,7 @@ interface Profile {
   email: string;
   display_name: string | null;
   role: string;
+  company_id?: number | null;
   company_name?: string | null;
 }
 
@@ -88,14 +90,25 @@ export default function Admin() {
   const [editUserModal, setEditUserModal] = useState<Profile | null>(null);
   const [editSiteModal, setEditSiteModal] = useState<Site | null>(null);
   const [editDeptModal, setEditDepartmentModal] = useState<Department | null>(null);
+  const [editDeptCompanyId, setEditDeptCompanyId] = useState<number | null>(null);
+  const [editDeptSiteId, setEditDeptSiteId] = useState<number | null>(null);
+  const [editSubscriptionModal, setEditSubscriptionModal] = useState<Company | null>(null);
+  const [editSubscriptionForm, setEditSubscriptionForm] = useState<Partial<Company>>({});
+  const [addCompanyModal, setAddCompanyModal] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyContactEmail, setNewCompanyContactEmail] = useState('');
+  const [newCompanyContactName, setNewCompanyContactName] = useState('');
+  const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
+  const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
+  const [createCompanyWithAdmin, setCreateCompanyWithAdmin] = useState(true);
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const isFullAdmin = profile?.role === 'super_admin' || profile?.role === 'company_admin';
   const canCreateUser = isFullAdmin || profile?.role === 'equipment_manager';
   if (!canCreateUser) return <Navigate to="/dashboard" replace />;
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError('');
     try {
       if (isFullAdmin) {
@@ -221,9 +234,73 @@ export default function Admin() {
         address_state: companyForm.address_state,
         address_zip: companyForm.address_zip,
       });
-      setCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...companyForm } : c)));
+      await load(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save company');
+    }
+  };
+
+  const handleAddCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCompanyName.trim()) return;
+    if (createCompanyWithAdmin && (!newCompanyAdminEmail.trim() || !newCompanyAdminPassword.trim())) {
+      setError('Admin email and password required when creating company admin');
+      return;
+    }
+    if (createCompanyWithAdmin && newCompanyAdminPassword.length < 6) {
+      setError('Admin password must be at least 6 characters');
+      return;
+    }
+    try {
+      await api.admin.createCompany({
+        name: newCompanyName.trim(),
+        contact_email: newCompanyContactEmail.trim() || newCompanyAdminEmail.trim(),
+        contact_name: newCompanyContactName.trim() || undefined,
+        create_admin: createCompanyWithAdmin,
+        admin_email: createCompanyWithAdmin ? newCompanyAdminEmail.trim() : undefined,
+        admin_password: createCompanyWithAdmin ? newCompanyAdminPassword : undefined,
+      });
+      setAddCompanyModal(false);
+      setNewCompanyName('');
+      setNewCompanyContactEmail('');
+      setNewCompanyContactName('');
+      setNewCompanyAdminEmail('');
+      setNewCompanyAdminPassword('');
+      await load(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add company');
+    }
+  };
+
+  const handleUpdateProfile = async (profileId: number, data: { display_name?: string | null; email?: string; company_id?: number | null }) => {
+    try {
+      await api.admin.updateProfile(profileId, data);
+      await load(false);
+      setEditUserModal(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update user');
+    }
+  };
+
+  const handleSaveSubscription = async (company: Company, formData: Partial<Company>) => {
+    try {
+      await api.admin.updateCompany(company.id, {
+        name: formData.name,
+        contact_name: formData.contact_name,
+        contact_email: formData.contact_email,
+        contact_phone: formData.contact_phone,
+        address_line1: formData.address_line1,
+        address_line2: formData.address_line2,
+        address_city: formData.address_city,
+        address_state: formData.address_state,
+        address_zip: formData.address_zip,
+        subscription_level: formData.subscription_level,
+        subscription_active: formData.subscription_active,
+      });
+      await load(false);
+      setEditSubscriptionModal(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save subscription');
     }
   };
 
@@ -233,7 +310,7 @@ export default function Admin() {
     try {
       await api.admin.createSite(newSiteName.trim(), isSuperAdmin && newSiteCompanyId ? parseInt(newSiteCompanyId, 10) : undefined);
       setNewSiteName('');
-      load();
+      await load(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add site');
     }
@@ -288,7 +365,7 @@ export default function Admin() {
     try {
       await api.admin.createDepartment(parseInt(newDeptSiteId, 10), newDeptName.trim());
       setNewDeptName('');
-      load();
+      await load(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add department');
     }
@@ -297,7 +374,7 @@ export default function Admin() {
   const handleUpdateSite = async (id: number, data: { name: string; company_id?: number | null }) => {
     try {
       await api.admin.updateSite(id, data);
-      setSites((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
+      await load(false);
       setEditSiteModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update site');
@@ -308,7 +385,7 @@ export default function Admin() {
     if (!confirm('Delete this site? Departments under it may be affected.')) return;
     try {
       await api.admin.deleteSite(id);
-      setSites((prev) => prev.filter((s) => s.id !== id));
+      await load(false);
       setEditSiteModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete site');
@@ -318,7 +395,7 @@ export default function Admin() {
   const handleUpdateDepartment = async (id: number, data: { name: string; site_id: number }) => {
     try {
       await api.admin.updateDepartment(id, data);
-      setDepartments((prev) => prev.map((d) => (d.id === id ? { ...d, ...data } : d)));
+      await load(false);
       setEditDepartmentModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update department');
@@ -329,7 +406,7 @@ export default function Admin() {
     if (!confirm('Delete this department?')) return;
     try {
       await api.admin.deleteDepartment(id);
-      setDepartments((prev) => prev.filter((d) => d.id !== id));
+      await load(false);
       setEditDepartmentModal(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete department');
@@ -357,7 +434,7 @@ export default function Admin() {
   if (loading) return <div className="page-header"><p>Loading…</p></div>;
 
   return (
-    <div>
+    <div className="admin-page">
       <div className="page-header">
         <h2>{isFullAdmin ? 'Admin Panel' : 'Create User'}</h2>
         <p style={{ color: 'var(--text-muted)' }}>
@@ -367,7 +444,7 @@ export default function Admin() {
       {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
 
       {isFullAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: (isSuperAdmin || profile?.role === 'company_admin') ? '1fr 1fr' : '1fr', gridTemplateRows: 'auto auto', gap: '1rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+        <div className="admin-top-grid">
           {/* Row 1, Col 1: Company Info */}
           {(isSuperAdmin || profile?.role === 'company_admin') && (
             <div className="card company-info-compact">
@@ -441,7 +518,7 @@ export default function Admin() {
                     style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
                   />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                <div className="admin-address-grid">
                   <div className="form-group">
                     <label>City</label>
                     <input
@@ -476,7 +553,7 @@ export default function Admin() {
           )}
 
           {/* Row 1, Col 2: Create User */}
-          <div className="card" style={{ gridColumn: (isSuperAdmin || profile?.role === 'company_admin') ? 2 : 1 }}>
+          <div className="card admin-create-user">
             <h3 className="card-title"><Users size={20} /> Create User</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               Create a new user account. They can sign in with the email and password you set.
@@ -495,14 +572,12 @@ export default function Admin() {
               </div>
               <div className="form-group">
                 <label>Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   required
                   minLength={6}
-                  style={{ width: '100%' }}
                 />
               </div>
               {isFullAdmin && (
@@ -554,7 +629,7 @@ export default function Admin() {
           </div>
 
           {/* Row 2: Users & Access (full width) */}
-          <div className="card" style={{ gridColumn: '1 / -1' }}>
+          <div className="card admin-users-access">
             <h3 className="card-title"><Users size={20} /> Users & Access</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               Set role and assign site/department access. Click row to expand access.
@@ -600,7 +675,7 @@ export default function Admin() {
             </div>
             <div className="form-group">
               <label>Password</label>
-              <input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" required minLength={6} style={{ width: '100%' }} />
+              <PasswordInput value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" required minLength={6} />
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access</label>
@@ -612,12 +687,17 @@ export default function Admin() {
       )}
 
       {/* Subscriptions - Super Admin */}
-      {isSuperAdmin && companies.length > 0 && (
+      {isSuperAdmin && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 className="card-title"><CreditCard size={20} /> Subscriptions</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-            Enable or disable subscription per company. Level 1–4 controls limits.
-          </p>
+          <div className="admin-subscriptions-header">
+            <div>
+              <h3 className="card-title"><CreditCard size={20} /> Subscriptions</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                Enable or disable subscription per company. Level 1–4 controls limits.
+              </p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => setAddCompanyModal(true)}>Add Company</button>
+          </div>
           <AdminTable
             columns={[
               { key: 'name', label: 'Company', value: (r) => r.name },
@@ -637,7 +717,7 @@ export default function Admin() {
                 type="button"
                 className="btn btn-secondary"
                 style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                onClick={() => { setSelectedCompanyId(row.id); setCompanyForm(row); }}
+                onClick={() => { setEditSubscriptionModal(row); setEditSubscriptionForm(row); }}
               >
                 <Pencil size={14} /> Edit
               </button>
@@ -647,12 +727,12 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Sites & Departments - 2 column, Sites narrower so Departments has more room */}
+      {/* Sites & Departments - 2 column on desktop, stack on mobile */}
       {isFullAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.45fr) minmax(360px, 1fr)', gap: '1rem' }}>
+        <div className="admin-sites-depts-grid">
           <div className="card">
             <h3 className="card-title"><Building2 size={20} /> Sites</h3>
-            <form onSubmit={handleAddSite} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <form onSubmit={handleAddSite} className="admin-form-row" style={{ marginBottom: '1rem' }}>
               {isSuperAdmin && companies.length > 0 && (
                 <select
                   value={newSiteCompanyId}
@@ -694,7 +774,7 @@ export default function Admin() {
 
           <div className="card">
             <h3 className="card-title"><FolderTree size={20} /> Departments</h3>
-            <form onSubmit={handleAddDepartment} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <form onSubmit={handleAddDepartment} className="admin-form-row" style={{ marginBottom: '1rem' }}>
               <select
                 value={newDeptSiteId}
                 onChange={(e) => setNewDeptSiteId(e.target.value)}
@@ -719,7 +799,7 @@ export default function Admin() {
               searchPlaceholder="Search departments…"
               renderActions={(row) => (
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => setEditDepartmentModal(row)}>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => { setEditDepartmentModal(row); const site = sites.find((s) => s.id === row.site_id); setEditDeptCompanyId(site?.company_id ?? null); setEditDeptSiteId(row.site_id); }}>
                     <Pencil size={14} />
                   </button>
                   <button type="button" className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => handleDeleteDepartment(row.id)}>
@@ -737,21 +817,49 @@ export default function Admin() {
       {editUserModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditUserModal(null)}>
           <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 480, width: '90%', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <h3>Edit User: {editUserModal.email}</h3>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Role</label>
-              <select
-                value={editUserModal.role}
-                onChange={(e) => handleRoleChange(editUserModal.id, e.target.value as Role)}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-              >
-                <option value="user">User</option>
-                <option value="equipment_manager">Equipment Manager</option>
-                <option value="company_admin">Company Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-            </div>
-            {(editUserModal.role === 'user' || editUserModal.role === 'equipment_manager') && (
+            <h3>Edit User</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const f = e.target as HTMLFormElement;
+              const displayName = (f.elements.namedItem('displayName') as HTMLInputElement)?.value?.trim();
+              const email = (f.elements.namedItem('userEmail') as HTMLInputElement)?.value?.trim();
+              const companyIdEl = f.elements.namedItem('userCompanyId') as HTMLSelectElement;
+              const companyId = isSuperAdmin && companyIdEl?.value ? parseInt(companyIdEl.value, 10) || null : editUserModal.company_id;
+              handleUpdateProfile(editUserModal.id, { display_name: displayName || null, email, company_id: companyId });
+            }}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Name</label>
+                <input name="displayName" type="text" defaultValue={editUserModal.display_name ?? ''} placeholder="Display name" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Email</label>
+                <input name="userEmail" type="email" defaultValue={editUserModal.email} required style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              {isSuperAdmin && (
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label>Company</label>
+                  <select name="userCompanyId" defaultValue={editUserModal.company_id ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}>
+                    <option value="">—</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Role</label>
+                <select
+                  value={editUserModal.role}
+                  onChange={(e) => handleRoleChange(editUserModal.id, e.target.value as Role)}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                >
+                  <option value="user">User</option>
+                  <option value="equipment_manager">Equipment Manager</option>
+                  <option value="company_admin">Company Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+              {(editUserModal.role === 'user' || editUserModal.role === 'equipment_manager') && (
               <div>
                 <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access</label>
                 <AccessCheckboxes
@@ -767,7 +875,11 @@ export default function Admin() {
                 />
               </div>
             )}
-            <button type="button" className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={() => setEditUserModal(null)}>Close</button>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary">Save</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditUserModal(null)}>Close</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -818,24 +930,184 @@ export default function Admin() {
               e.preventDefault();
               const form = e.target as HTMLFormElement;
               const name = (form.elements.namedItem('deptName') as HTMLInputElement)?.value;
-              const siteId = parseInt((form.elements.namedItem('deptSiteId') as HTMLSelectElement)?.value || '0', 10);
+              const siteId = editDeptSiteId ?? parseInt((form.elements.namedItem('deptSiteId') as HTMLSelectElement)?.value || '0', 10);
               handleUpdateDepartment(editDeptModal.id, { name, site_id: siteId });
             }}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label>Name</label>
                 <input name="deptName" type="text" defaultValue={editDeptModal.name} required style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
               </div>
+              {isSuperAdmin && companies.length > 0 && (
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label>Company</label>
+                  <select
+                    value={editDeptCompanyId ?? sites.find((s) => s.id === editDeptModal.site_id)?.company_id ?? ''}
+                    onChange={(e) => {
+                      const cid = e.target.value ? parseInt(e.target.value, 10) : null;
+                      setEditDeptCompanyId(cid);
+                      const firstInCompany = cid ? sites.find((s) => s.company_id === cid) : null;
+                      setEditDeptSiteId(firstInCompany?.id ?? null);
+                    }}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                  >
+                    <option value="">—</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label>Site</label>
-                <select name="deptSiteId" defaultValue={editDeptModal.site_id} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}>
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
+                <select
+                  name="deptSiteId"
+                  value={(() => {
+                    const deptSites = editDeptCompanyId ? sites.filter((s) => s.company_id === editDeptCompanyId) : sites;
+                    const currentId = editDeptSiteId ?? editDeptModal.site_id;
+                    const valid = deptSites.some((s) => s.id === currentId);
+                    return valid ? currentId : (deptSites[0]?.id ?? currentId);
+                  })()}
+                  onChange={(e) => setEditDeptSiteId(parseInt(e.target.value, 10))}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                >
+                  {(() => {
+                    const deptSites = editDeptCompanyId ? sites.filter((s) => s.company_id === editDeptCompanyId) : sites;
+                    return (deptSites.length ? deptSites : sites).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} {isSuperAdmin && s.company_name ? `(${s.company_name})` : ''}</option>
+                  ));
+                  })()}
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary">Save</button>
                 <button type="button" className="btn btn-secondary" onClick={() => setEditDepartmentModal(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Subscription Modal */}
+      {editSubscriptionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditSubscriptionModal(null)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 480, width: '90%', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Company & Subscription</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              handleSaveSubscription(editSubscriptionModal, {
+                name: (form.elements.namedItem('subName') as HTMLInputElement)?.value,
+                contact_name: (form.elements.namedItem('subContactName') as HTMLInputElement)?.value || null,
+                contact_email: (form.elements.namedItem('subContactEmail') as HTMLInputElement)?.value || null,
+                contact_phone: (form.elements.namedItem('subContactPhone') as HTMLInputElement)?.value || null,
+                address_line1: (form.elements.namedItem('subAddr1') as HTMLInputElement)?.value || null,
+                address_line2: (form.elements.namedItem('subAddr2') as HTMLInputElement)?.value || null,
+                address_city: (form.elements.namedItem('subCity') as HTMLInputElement)?.value || null,
+                address_state: (form.elements.namedItem('subState') as HTMLInputElement)?.value || null,
+                address_zip: (form.elements.namedItem('subZip') as HTMLInputElement)?.value || null,
+                subscription_level: parseInt((form.elements.namedItem('subLevel') as HTMLSelectElement)?.value || '1', 10),
+                subscription_active: (form.elements.namedItem('subActive') as HTMLInputElement)?.checked ?? true,
+              });
+            }}>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Company Name</label>
+                <input name="subName" type="text" defaultValue={editSubscriptionForm.name ?? editSubscriptionModal.name} required style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Contact Name</label>
+                <input name="subContactName" type="text" defaultValue={editSubscriptionForm.contact_name ?? editSubscriptionModal.contact_name ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Contact Email</label>
+                <input name="subContactEmail" type="email" defaultValue={editSubscriptionForm.contact_email ?? editSubscriptionModal.contact_email ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Contact Phone</label>
+                <input name="subContactPhone" type="tel" defaultValue={editSubscriptionForm.contact_phone ?? editSubscriptionModal.contact_phone ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Address Line 1</label>
+                <input name="subAddr1" type="text" defaultValue={editSubscriptionForm.address_line1 ?? editSubscriptionModal.address_line1 ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Address Line 2</label>
+                <input name="subAddr2" type="text" defaultValue={editSubscriptionForm.address_line2 ?? editSubscriptionModal.address_line2 ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="admin-address-grid" style={{ marginBottom: '0.75rem' }}>
+                <div className="form-group">
+                  <label>City</label>
+                  <input name="subCity" type="text" defaultValue={editSubscriptionForm.address_city ?? editSubscriptionModal.address_city ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+                <div className="form-group">
+                  <label>State</label>
+                  <input name="subState" type="text" defaultValue={editSubscriptionForm.address_state ?? editSubscriptionModal.address_state ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+                <div className="form-group">
+                  <label>ZIP</label>
+                  <input name="subZip" type="text" defaultValue={editSubscriptionForm.address_zip ?? editSubscriptionModal.address_zip ?? ''} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Subscription Level</label>
+                  <select name="subLevel" defaultValue={editSubscriptionForm.subscription_level ?? editSubscriptionModal.subscription_level ?? 1} style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}>
+                    <option value={1}>Level 1</option>
+                    <option value={2}>Level 2</option>
+                    <option value={3}>Level 3</option>
+                    <option value={4}>Level 4</option>
+                  </select>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input name="subActive" type="checkbox" defaultChecked={editSubscriptionForm.subscription_active ?? editSubscriptionModal.subscription_active ?? true} />
+                  Active
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary">Save</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditSubscriptionModal(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Company Modal */}
+      {addCompanyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddCompanyModal(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 440, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <h3>Add Company</h3>
+            <form onSubmit={handleAddCompany}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Company Name</label>
+                <input type="text" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} required placeholder="Company name" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Contact Name</label>
+                <input type="text" value={newCompanyContactName} onChange={(e) => setNewCompanyContactName(e.target.value)} placeholder="Main contact" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Contact Email</label>
+                <input type="email" value={newCompanyContactEmail} onChange={(e) => setNewCompanyContactEmail(e.target.value)} placeholder="contact@company.com" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={createCompanyWithAdmin} onChange={(e) => setCreateCompanyWithAdmin(e.target.checked)} />
+                Create company admin user
+              </label>
+              {createCompanyWithAdmin && (
+                <>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>Admin Email</label>
+                    <input type="email" value={newCompanyAdminEmail} onChange={(e) => setNewCompanyAdminEmail(e.target.value)} required placeholder="admin@company.com" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>Admin Password</label>
+                    <PasswordInput value={newCompanyAdminPassword} onChange={(e) => setNewCompanyAdminPassword(e.target.value)} required placeholder="Min 6 characters" minLength={6} />
+                  </div>
+                </>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary">Add Company</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setAddCompanyModal(false)}>Cancel</button>
               </div>
             </form>
           </div>
