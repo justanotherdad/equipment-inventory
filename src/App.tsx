@@ -82,6 +82,9 @@ function ProtectedLayout() {
               <LogOut size={20} />
               <span>Sign out</span>
             </button>
+            <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+              {profile.email}
+            </div>
           </nav>
         </aside>
         <main className="main-content">
