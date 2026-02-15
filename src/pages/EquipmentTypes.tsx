@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Plus, Edit, Trash2, ArrowUpDown } from 'lucide-react';
 import EquipmentTypeModal from '../components/EquipmentTypeModal';
 import { api } from '../api';
 
@@ -10,10 +10,19 @@ interface EquipmentType {
   calibration_frequency_months: number | null;
 }
 
+type SortKey = 'name' | 'requires_calibration' | 'calibration_frequency_months';
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'requires_calibration', label: 'Calibration' },
+  { key: 'calibration_frequency_months', label: 'Frequency' },
+];
+
 export default function EquipmentTypes() {
   const [types, setTypes] = useState<EquipmentType[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortAsc, setSortAsc] = useState(true);
 
   const load = async () => {
     const data = await api.equipmentTypes.getAll();
@@ -23,6 +32,33 @@ export default function EquipmentTypes() {
   useEffect(() => {
     load();
   }, []);
+
+  const sorted = useMemo(() => {
+    const arr = [...types];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'name') cmp = (a.name || '').localeCompare(b.name || '');
+      else if (sortKey === 'requires_calibration') cmp = (a.requires_calibration ? 1 : 0) - (b.requires_calibration ? 1 : 0);
+      else if (sortKey === 'calibration_frequency_months') {
+        const va = a.calibration_frequency_months ?? -1;
+        const vb = b.calibration_frequency_months ?? -1;
+        cmp = va - vb;
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+    return arr;
+  }, [types, sortKey, sortAsc]);
+
+  const handleSort = (key: SortKey) => {
+    setSortKey(key);
+    setSortAsc((prev) => (sortKey === key ? !prev : true));
+  };
+
+  const cycleSortField = () => {
+    const idx = SORT_OPTIONS.findIndex((o) => o.key === sortKey);
+    setSortKey(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].key);
+    setSortAsc(true);
+  };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this equipment type? Equipment of this type must be deleted or reassigned first.')) return;
@@ -52,18 +88,23 @@ export default function EquipmentTypes() {
           Equipment types define categories (e.g. Temperature Logger, Laptop). For each type, you can specify whether
           calibration is required and the recalibration frequency in months.
         </p>
+        <div className="sort-by-mobile">
+          <button type="button" className="btn btn-secondary" onClick={cycleSortField}>
+            <ArrowUpDown size={16} /> Sort by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
+          </button>
+        </div>
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Requires Calibration</th>
-                <th>Frequency</th>
+                <th className="sortable" onClick={() => handleSort('name')}>Name {sortKey === 'name' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('requires_calibration')}>Requires Calibration {sortKey === 'requires_calibration' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('calibration_frequency_months')}>Frequency {sortKey === 'calibration_frequency_months' && (sortAsc ? '↑' : '↓')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {types.map((t) => (
+              {sorted.map((t) => (
                 <tr key={t.id}>
                   <td>{t.name}</td>
                   <td>{t.requires_calibration ? 'Yes' : 'No'}</td>
@@ -83,7 +124,7 @@ export default function EquipmentTypes() {
         </div>
 
         <div className="mobile-list">
-          {types.map((t) => (
+          {sorted.map((t) => (
             <div key={t.id} className="mobile-card">
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Name</span>

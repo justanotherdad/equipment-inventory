@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, ArrowUpDown } from 'lucide-react';
 import { api } from '../api';
 
 interface CalStatus {
@@ -16,9 +16,23 @@ interface CalStatus {
   days_until_due: number | null;
 }
 
+type SortKey = 'status' | 'equipment_type_name' | 'equipment' | 'serial_number' | 'last_calibration_date' | 'next_calibration_due';
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'next_calibration_due', label: 'Cal Due Date' },
+  { key: 'serial_number', label: 'Serial #' },
+  { key: 'status', label: 'Status' },
+  { key: 'equipment_type_name', label: 'Type' },
+  { key: 'equipment', label: 'Equipment' },
+  { key: 'last_calibration_date', label: 'Last Calibration' },
+];
+
+const STATUS_ORDER = { due: 0, due_soon: 1, ok: 2, 'n/a': 3 };
+
 export default function CalibrationStatus() {
   const [items, setItems] = useState<CalStatus[]>([]);
   const [filter, setFilter] = useState<'all' | 'due' | 'due_soon' | 'ok' | 'n/a'>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('next_calibration_due');
+  const [sortAsc, setSortAsc] = useState(true);
 
   useEffect(() => {
     api.equipment.getCalibrationStatus().then(setItems);
@@ -28,6 +42,41 @@ export default function CalibrationStatus() {
     if (filter === 'all') return true;
     return i.status === filter;
   });
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'status') {
+        cmp = (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4);
+      } else if (sortKey === 'equipment_type_name') {
+        cmp = (a.equipment_type_name || '').localeCompare(b.equipment_type_name || '');
+      } else if (sortKey === 'equipment') {
+        const am = `${a.make} ${a.model}`;
+        const bm = `${b.make} ${b.model}`;
+        cmp = am.localeCompare(bm);
+      } else if (sortKey === 'serial_number') {
+        cmp = (a.serial_number || '').localeCompare(b.serial_number || '');
+      } else if (sortKey === 'last_calibration_date' || sortKey === 'next_calibration_due') {
+        const da = (a[sortKey] ? new Date(a[sortKey]!).getTime() : 0);
+        const db = (b[sortKey] ? new Date(b[sortKey]!).getTime() : 0);
+        cmp = da - db;
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtered, sortKey, sortAsc]);
+
+  const handleSort = (key: SortKey) => {
+    setSortKey(key);
+    setSortAsc((prev) => (sortKey === key ? !prev : true));
+  };
+
+  const cycleSortField = () => {
+    const idx = SORT_OPTIONS.findIndex((o) => o.key === sortKey);
+    setSortKey(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].key);
+    setSortAsc(true);
+  };
 
   const counts = {
     due: items.filter((i) => i.status === 'due').length,
@@ -90,21 +139,26 @@ export default function CalibrationStatus() {
           </button>
         </div>
 
+        <div className="sort-by-mobile">
+          <button type="button" className="btn btn-secondary" onClick={cycleSortField}>
+            <ArrowUpDown size={16} /> Sort by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
+          </button>
+        </div>
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Status</th>
-                <th>Type</th>
-                <th>Equipment</th>
-                <th>Serial #</th>
-                <th>Last Calibration</th>
-                <th>Next Due</th>
+                <th className="sortable" onClick={() => handleSort('status')}>Status {sortKey === 'status' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('equipment_type_name')}>Type {sortKey === 'equipment_type_name' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('equipment')}>Equipment {sortKey === 'equipment' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('serial_number')}>Serial # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('last_calibration_date')}>Last Calibration {sortKey === 'last_calibration_date' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('next_calibration_due')}>Next Due {sortKey === 'next_calibration_due' && (sortAsc ? '↑' : '↓')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => (
+              {sorted.map((item) => (
                 <tr key={item.id}>
                   <td>{statusBadge(item)}</td>
                   <td>{item.equipment_type_name}</td>
@@ -124,7 +178,7 @@ export default function CalibrationStatus() {
         </div>
 
         <div className="mobile-list">
-          {filtered.map((item) => (
+          {sorted.map((item) => (
             <div key={item.id} className="mobile-card">
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Status</span>

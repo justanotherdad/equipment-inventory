@@ -210,17 +210,20 @@ export class Database {
     role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin',
     creatorProfile: Profile,
     access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[],
-    companyId?: number | null
+    companyId?: number | null,
+    displayName?: string | null
   ): Promise<Profile> {
     const assignedCompanyId = companyId ?? (creatorProfile.role === 'company_admin' ? creatorProfile.company_id : null);
+    const payload: Record<string, unknown> = {
+      auth_user_id: authUserId,
+      email: email.toLowerCase(),
+      role,
+      company_id: assignedCompanyId ?? null,
+    };
+    if (displayName !== undefined && displayName !== null) payload.display_name = displayName;
     const { data: profile, error } = await this.supabase
       .from('profiles')
-      .insert({
-        auth_user_id: authUserId,
-        email: email.toLowerCase(),
-        role,
-        company_id: assignedCompanyId ?? null,
-      })
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;

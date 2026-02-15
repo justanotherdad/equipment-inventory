@@ -655,7 +655,8 @@ app.post('/api/admin/companies', superAdminOnly, async (req, res) => {
       });
       if (authErr) return res.status(400).json({ error: authErr.message });
       if (authUser?.user?.id) {
-        await db.createUserProfile(authUser.user.id, admin_email.trim().toLowerCase(), 'company_admin', req.profile, [], companyId);
+        const displayName = contactName || null;
+        await db.createUserProfile(authUser.user.id, admin_email.trim().toLowerCase(), 'company_admin', req.profile, [], companyId, displayName);
       }
     }
     res.status(201).json({ ok: true, id: companyId });

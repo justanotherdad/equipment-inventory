@@ -409,6 +409,32 @@ html, body {
   }
 }
 
+.sort-by-mobile {
+  display: none;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 767px) {
+  .sort-by-mobile {
+    display: block;
+  }
+}
+
+@media (min-width: 768px) {
+  .sort-by-mobile {
+    display: none !important;
+  }
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable:hover {
+  text-decoration: underline;
+}
+
 .table-container {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

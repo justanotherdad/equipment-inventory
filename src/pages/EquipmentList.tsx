@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit3 } from 'lucide-react';
+import { Plus, Search, Edit3, ArrowUpDown } from 'lucide-react';
 import EquipmentModal from '../components/EquipmentModal';
 import BulkEditModal from '../components/BulkEditModal';
 import { api } from '../api';
@@ -19,6 +19,16 @@ interface Equipment {
   next_calibration_due: string | null;
 }
 
+type SortKey = 'equipment_type_name' | 'make' | 'model' | 'serial_number' | 'last_calibration_date' | 'next_calibration_due';
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'serial_number', label: 'Serial #' },
+  { key: 'equipment_type_name', label: 'Type' },
+  { key: 'make', label: 'Make' },
+  { key: 'model', label: 'Model' },
+  { key: 'last_calibration_date', label: 'Last Cal' },
+  { key: 'next_calibration_due', label: 'Next Cal Due' },
+];
+
 export default function EquipmentList() {
   const { profile } = useAuth();
   const canEdit = profile?.role === 'equipment_manager' || profile?.role === 'company_admin' || profile?.role === 'super_admin';
@@ -27,6 +37,8 @@ export default function EquipmentList() {
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>('serial_number');
+  const [sortAsc, setSortAsc] = useState(true);
 
   const load = async () => {
     const data = await api.equipment.getAll();
@@ -48,6 +60,35 @@ export default function EquipmentList() {
   );
 
   const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (sortKey === 'last_calibration_date' || sortKey === 'next_calibration_due') {
+        const da = av ? new Date(av as string).getTime() : 0;
+        const db = bv ? new Date(bv as string).getTime() : 0;
+        cmp = da - db;
+      } else {
+        cmp = String(av ?? '').localeCompare(String(bv ?? ''));
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+    return arr;
+  }, [filtered, sortKey, sortAsc]);
+
+  const handleSort = (key: SortKey) => {
+    setSortKey(key);
+    setSortAsc((prev) => (sortKey === key ? !prev : true));
+  };
+
+  const cycleSortField = () => {
+    const idx = SORT_OPTIONS.findIndex((o) => o.key === sortKey);
+    setSortKey(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].key);
+    setSortAsc(true);
+  };
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
@@ -104,6 +145,11 @@ export default function EquipmentList() {
           />
         </div>
 
+        <div className="sort-by-mobile">
+          <button type="button" className="btn btn-secondary" onClick={cycleSortField}>
+            <ArrowUpDown size={16} /> Sort by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
+          </button>
+        </div>
         <div className="table-container">
           <table>
             <thead>
@@ -118,17 +164,17 @@ export default function EquipmentList() {
                     />
                   </th>
                 )}
-                <th>Type</th>
-                <th>Make</th>
-                <th>Model</th>
-                <th>Serial / Equip #</th>
-                <th>Last Cal</th>
-                <th>Next Cal Due</th>
+                <th className="sortable" onClick={() => handleSort('equipment_type_name')}>Type {sortKey === 'equipment_type_name' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('make')}>Make {sortKey === 'make' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('model')}>Model {sortKey === 'model' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('serial_number')}>Serial / Equip # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('last_calibration_date')}>Last Cal {sortKey === 'last_calibration_date' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('next_calibration_due')}>Next Cal Due {sortKey === 'next_calibration_due' && (sortAsc ? '↑' : '↓')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
+              {sorted.map((e) => (
                 <tr key={e.id}>
                   {canEdit && (
                     <td>
@@ -153,7 +199,7 @@ export default function EquipmentList() {
         </div>
 
         <div className="mobile-list">
-          {filtered.map((e) => (
+          {sorted.map((e) => (
             <div key={e.id} className="mobile-card">
               {canEdit && (
                 <div style={{ marginBottom: '0.5rem' }}>
