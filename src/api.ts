@@ -27,6 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  setAuthToken,
   auth: {
     getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'admin' }>('/api/auth/me'),
   },

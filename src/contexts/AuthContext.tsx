@@ -42,8 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const p = await api.auth.getProfile();
       setProfile(p);
       api.setAuthToken(session.access_token);
-    } catch {
+      setError(null);
+    } catch (e) {
       setProfile(null);
+      setError(e instanceof Error ? e.message : 'Failed to load profile. Check that the server is running and schema-v3-auth-access.sql was applied.');
     }
   }, [session?.user?.id, session?.access_token]);
 
