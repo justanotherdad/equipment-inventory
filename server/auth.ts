@@ -47,12 +47,9 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   req.authUser = user;
 
-  // Fetch or create profile for access control
+  // Fetch or create profile for access control (upsert ensures SUPER_ADMIN_EMAIL is applied on every login)
   const db = new Database(supabaseUrl, supabaseKey);
-  let profile = await db.getProfileByAuthUserId(user.id);
-  if (!profile) {
-    profile = await db.upsertProfile(user.id, user.email ?? '', 'user');
-  }
+  const profile = await db.upsertProfile(user.id, user.email ?? '', 'user');
   req.profile = profile;
 
   next();

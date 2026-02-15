@@ -71,7 +71,7 @@ export default function Admin() {
 
   const isFullAdmin = profile?.role === 'super_admin' || profile?.role === 'company_admin';
   const canCreateUser = isFullAdmin || profile?.role === 'equipment_manager';
-  if (!canCreateUser) return <Navigate to="/" replace />;
+  if (!canCreateUser) return <Navigate to="/dashboard" replace />;
 
   const load = async () => {
     setLoading(true);

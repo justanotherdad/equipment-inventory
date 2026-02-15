@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -24,7 +24,7 @@ export default function Login() {
     }
   };
 
-  if (profile) return <Navigate to="/" replace />;
+  if (profile) return <Navigate to="/dashboard" replace />;
 
   if (!supabase) {
     return (
@@ -89,6 +89,9 @@ export default function Login() {
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
+          <Link to="/pricing" style={{ fontSize: '0.9rem', color: 'var(--accent)', textDecoration: 'none' }}>
+            View plans & pricing
+          </Link>
         </form>
       </div>
     </div>

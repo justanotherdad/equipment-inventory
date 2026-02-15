@@ -146,6 +146,32 @@ The server loads credentials from `.env` automatically.
 
 ---
 
+## Super Admin: Changing Email & Adding More
+
+### Changing the super admin email (env-based)
+
+The `SUPER_ADMIN_EMAIL` env var controls who gets super admin on first login. To transfer to a new email:
+
+1. **In Render** → Environment → Edit `SUPER_ADMIN_EMAIL` → Set to the new email (e.g. `newadmin@example.com`)
+2. **Save Changes** → Trigger a new deploy (Manual Deploy → Deploy latest commit)
+3. **New user**: Have the new person sign up at `/login` with the new email, or create their account via Supabase Auth (Dashboard → Authentication → Users → Add user)
+4. **First login**: When they log in, they will receive the super admin role
+5. **Optional – demote old super admin**: Log in as the new super admin → Admin → Users & Access → Expand the old email → Change role from Super Admin to User (or another role)
+
+### Adding more super admins
+
+You can add additional super admins without changing env vars:
+
+1. **Log in** as an existing super admin
+2. Go to **Admin** → **Users & Access**
+3. Find the user to promote (or have them sign up first)
+4. Expand their row → **Role** dropdown → Select **Super Admin**
+5. Save
+
+Any user with the Super Admin role has full access, regardless of `SUPER_ADMIN_EMAIL`. The env var only affects who gets super admin on *first* login.
+
+---
+
 ## Subscription Levels (schema-v4)
 
 | Level | Sites | Depts/Site | Eq Managers | Users |

@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import './App.css';
 import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Landing from './pages/Landing';
+import Pricing from './pages/Pricing';
 import Dashboard from './pages/Dashboard';
 import EquipmentList from './pages/EquipmentList';
 import EquipmentDetail from './pages/EquipmentDetail';
@@ -16,7 +18,7 @@ import CalibrationDownloads from './pages/CalibrationDownloads';
 import Login from './pages/Login';
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/equipment', icon: Package, label: 'Equipment' },
   { to: '/request', icon: Send, label: 'Request Equipment' },
   { to: '/requests', icon: Inbox, label: 'Request Queue' },
@@ -91,7 +93,7 @@ function ProtectedLayout() {
         </aside>
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/equipment" element={<EquipmentList />} />
             <Route path="/equipment/:id" element={<EquipmentDetail />} />
             <Route path="/request" element={<RequestEquipment />} />
@@ -112,8 +114,10 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/*" element={<ProtectedLayout />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="*" element={<ProtectedLayout />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

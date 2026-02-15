@@ -553,3 +553,182 @@ tr:hover td {
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+/* Landing page */
+.landing-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.landing-content {
+  text-align: center;
+  max-width: 480px;
+}
+
+.landing-header h1 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 2rem;
+}
+
+.landing-tagline {
+  margin: 1rem 0 2rem;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.landing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 200px;
+  justify-content: center;
+}
+
+/* Pricing page */
+.pricing-page {
+  min-height: 100vh;
+  padding: 2rem 1rem 3rem;
+}
+
+.pricing-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.pricing-back:hover {
+  color: var(--accent);
+}
+
+.pricing-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.pricing-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.pricing-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .pricing-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.pricing-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.pricing-card-highlight {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.pricing-badge {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--success);
+  color: var(--bg-primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.pricing-tier-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.pricing-description {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.pricing-price {
+  margin-bottom: 1rem;
+}
+
+.pricing-amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.pricing-period {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.pricing-features {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  flex: 1;
+}
+
+.pricing-features li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.pricing-check {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.pricing-excluded {
+  color: var(--text-muted);
+}
+
+.pricing-x {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
