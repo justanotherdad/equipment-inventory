@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
 import { Navigate } from 'react-router-dom';
-import { Users, Building2, FolderTree, CreditCard, Pencil, Trash2 } from 'lucide-react';
+import { Users, Building2, FolderTree, CreditCard, Pencil, Trash2, UserPlus } from 'lucide-react';
 import AccessCheckboxes from '../components/AccessCheckboxes';
 import PasswordInput from '../components/PasswordInput';
 import { AdminTable, AdminTableColumn } from '../components/AdminTable';
@@ -95,6 +95,7 @@ export default function Admin() {
   const [editSubscriptionModal, setEditSubscriptionModal] = useState<Company | null>(null);
   const [editSubscriptionForm, setEditSubscriptionForm] = useState<Partial<Company>>({});
   const [addCompanyModal, setAddCompanyModal] = useState(false);
+  const [createUserModal, setCreateUserModal] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyContactEmail, setNewCompanyContactEmail] = useState('');
   const [newCompanyContactName, setNewCompanyContactName] = useState('');
@@ -336,7 +337,8 @@ export default function Admin() {
       setNewUserEmail('');
       setNewUserPassword('');
       setNewUserAccess([]);
-      if (isFullAdmin) load();
+      setCreateUserModal(false);
+      if (isFullAdmin) await load(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create user');
     } finally {
@@ -445,9 +447,9 @@ export default function Admin() {
 
       {isFullAdmin && (
         <div className="admin-top-grid">
-          {/* Row 1, Col 1: Company Info */}
+          {/* Row 1, Col 1: Company Info (narrower) */}
           {(isSuperAdmin || profile?.role === 'company_admin') && (
-            <div className="card company-info-compact">
+            <div className="card company-info-compact admin-company-info">
               <h3 className="card-title"><Building2 size={20} /> Company Info</h3>
               {isSuperAdmin && companies.length > 0 && (
                 <div className="form-group" style={{ marginBottom: '0.5rem' }}>
@@ -552,88 +554,62 @@ export default function Admin() {
             </div>
           )}
 
-          {/* Row 1, Col 2: Create User */}
-          <div className="card admin-create-user">
-            <h3 className="card-title"><Users size={20} /> Create User</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              Create a new user account. They can sign in with the email and password you set.
-            </p>
-            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 400 }}>
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={newUserEmail}
-                  onChange={(e) => setNewUserEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  required
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Password</label>
-                <PasswordInput
-                  value={newUserPassword}
-                  onChange={(e) => setNewUserPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  required
-                  minLength={6}
-                />
-              </div>
-              {isFullAdmin && (
-                <div className="form-group">
-                  <label>Role</label>
-                  <select
-                    value={newUserRole}
-                    onChange={(e) => setNewUserRole(e.target.value as Role)}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                  >
-                    <option value="user">User</option>
-                    <option value="equipment_manager">Equipment Manager</option>
-                    <option value="company_admin">Company Admin</option>
-                    {isSuperAdmin && <option value="super_admin">Super Admin</option>}
-                  </select>
-                </div>
-              )}
+          {/* Row 1, Col 2: Sites */}
+          <div className="card admin-sites-col">
+            <h3 className="card-title"><Building2 size={20} /> Sites</h3>
+            <form onSubmit={handleAddSite} className="admin-form-row" style={{ marginBottom: '1rem' }}>
               {isSuperAdmin && companies.length > 0 && (
-                <div className="form-group">
-                  <label>Company (for company_admin)</label>
-                  <select
-                    value={newUserCompanyId}
-                    onChange={(e) => setNewUserCompanyId(e.target.value)}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                  >
-                    <option value="">—</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  value={newSiteCompanyId}
+                  onChange={(e) => setNewSiteCompanyId(e.target.value)}
+                  style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                >
+                  <option value="">Select company</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               )}
-              {(profile?.role === 'equipment_manager' || (isFullAdmin && (newUserRole === 'user' || newUserRole === 'equipment_manager'))) && (
-                <div>
-                  <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access</label>
-                  <AccessCheckboxes
-                    sites={sites}
-                    departments={departments}
-                    equipment={equipment}
-                    access={newUserAccess}
-                    onSave={setNewUserAccess}
-                  />
-                </div>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={creatingUser}>
-                {creatingUser ? 'Creating…' : 'Create User'}
-              </button>
+              <input
+                type="text"
+                placeholder="New site name"
+                value={newSiteName}
+                onChange={(e) => setNewSiteName(e.target.value)}
+                style={{ flex: 1, minWidth: 120, padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+              />
+              <button type="submit" className="btn btn-primary">Add Site</button>
             </form>
+            <AdminTable
+              columns={sitesColumns}
+              data={sites}
+              searchPlaceholder="Search sites…"
+              renderActions={(row) => (
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => setEditSiteModal(row)}>
+                    <Pencil size={14} />
+                  </button>
+                  <button type="button" className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => handleDeleteSite(row.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+              emptyMessage="No sites"
+            />
           </div>
 
           {/* Row 2: Users & Access (full width) */}
           <div className="card admin-users-access">
-            <h3 className="card-title"><Users size={20} /> Users & Access</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              Set role and assign site/department access. Click row to expand access.
-            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <h3 className="card-title" style={{ marginBottom: 0.25 }}><Users size={20} /> Users & Access</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                  Set role and assign site/department access. Edit row to modify.
+                </p>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => setCreateUserModal(true)}>
+                <UserPlus size={18} /> Add User
+              </button>
+            </div>
             <AdminTable
               columns={usersColumns}
               data={profiles}
@@ -667,22 +643,13 @@ export default function Admin() {
 
       {canCreateUser && !isFullAdmin && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 className="card-title">Create User</h3>
-          <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 400 }}>
-            <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="user@example.com" required style={{ width: '100%' }} />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <PasswordInput value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" required minLength={6} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access</label>
-              <AccessCheckboxes sites={sites} departments={departments} equipment={equipment} access={newUserAccess} onSave={setNewUserAccess} />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={creatingUser}>{creatingUser ? 'Creating…' : 'Create User'}</button>
-          </form>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Users</h3>
+            <button type="button" className="btn btn-primary" onClick={() => setCreateUserModal(true)}>
+              <UserPlus size={18} /> Add User
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 0.5 }}>Add users within your access scope.</p>
         </div>
       )}
 
@@ -727,51 +694,9 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Sites & Departments - 2 column on desktop, stack on mobile */}
+      {/* Departments */}
       {isFullAdmin && (
         <div className="admin-sites-depts-grid">
-          <div className="card">
-            <h3 className="card-title"><Building2 size={20} /> Sites</h3>
-            <form onSubmit={handleAddSite} className="admin-form-row" style={{ marginBottom: '1rem' }}>
-              {isSuperAdmin && companies.length > 0 && (
-                <select
-                  value={newSiteCompanyId}
-                  onChange={(e) => setNewSiteCompanyId(e.target.value)}
-                  style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                >
-                  <option value="">Select company</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              )}
-              <input
-                type="text"
-                placeholder="New site name"
-                value={newSiteName}
-                onChange={(e) => setNewSiteName(e.target.value)}
-                style={{ flex: 1, minWidth: 120, padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-              />
-              <button type="submit" className="btn btn-primary">Add Site</button>
-            </form>
-            <AdminTable
-              columns={sitesColumns}
-              data={sites}
-              searchPlaceholder="Search sites…"
-              renderActions={(row) => (
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => setEditSiteModal(row)}>
-                    <Pencil size={14} />
-                  </button>
-                  <button type="button" className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }} onClick={() => handleDeleteSite(row.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )}
-              emptyMessage="No sites"
-            />
-          </div>
-
           <div className="card">
             <h3 className="card-title"><FolderTree size={20} /> Departments</h3>
             <form onSubmit={handleAddDepartment} className="admin-form-row" style={{ marginBottom: '1rem' }}>
@@ -1108,6 +1033,90 @@ export default function Admin() {
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary">Add Company</button>
                 <button type="button" className="btn btn-secondary" onClick={() => setAddCompanyModal(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {createUserModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setCreateUserModal(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 440, width: '90%', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h3><Users size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} /> Create User</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Create a new user account. They can sign in with the email and password you set.
+            </p>
+            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <PasswordInput
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  required
+                  minLength={6}
+                  style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)' }}
+                />
+              </div>
+              {isFullAdmin && (
+                <div className="form-group">
+                  <label>Role</label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value as Role)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                  >
+                    <option value="user">User</option>
+                    <option value="equipment_manager">Equipment Manager</option>
+                    <option value="company_admin">Company Admin</option>
+                    {isSuperAdmin && <option value="super_admin">Super Admin</option>}
+                  </select>
+                </div>
+              )}
+              {isSuperAdmin && companies.length > 0 && (
+                <div className="form-group">
+                  <label>Company (for company_admin)</label>
+                  <select
+                    value={newUserCompanyId}
+                    onChange={(e) => setNewUserCompanyId(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                  >
+                    <option value="">—</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {(profile?.role === 'equipment_manager' || (isFullAdmin && (newUserRole === 'user' || newUserRole === 'equipment_manager'))) && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access</label>
+                  <AccessCheckboxes
+                    sites={sites}
+                    departments={departments}
+                    equipment={equipment}
+                    access={newUserAccess}
+                    onSave={setNewUserAccess}
+                  />
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={creatingUser}>
+                  {creatingUser ? 'Creating…' : 'Create User'}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setCreateUserModal(false)}>Cancel</button>
               </div>
             </form>
           </div>

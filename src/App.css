@@ -200,9 +200,29 @@ html, body {
   min-width: 0;
 }
 
+.admin-company-info {
+  grid-column: 1;
+}
+
+.admin-sites-col {
+  grid-column: 1;
+}
+
+.admin-users-access {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 768px) {
   .admin-top-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(260px, 0.4fr) minmax(320px, 1fr);
+  }
+
+  .admin-company-info {
+    grid-column: 1;
+  }
+
+  .admin-sites-col {
+    grid-column: 2;
   }
 }
 
@@ -243,19 +263,6 @@ html, body {
   }
 }
 
-.admin-create-user {
-  grid-column: 1;
-}
-
-.admin-users-access {
-  grid-column: 1 / -1;
-}
-
-@media (min-width: 768px) {
-  .admin-create-user {
-    grid-column: 2;
-  }
-}
 
 /* Admin forms - stack on mobile */
 .admin-form-row {
