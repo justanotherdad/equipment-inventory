@@ -156,6 +156,7 @@ export default function RequestEquipment() {
                       type="checkbox"
                       checked={selectedIds.has(e.id)}
                       onChange={() => toggleEquipment(e.id)}
+                      style={{ flexShrink: 0, width: '1.125rem', height: '1.125rem', margin: 0 }}
                     />
                     <span style={{ fontSize: '0.9rem', flex: 1 }}>
                       {label}{suffix}{typeSuffix}
