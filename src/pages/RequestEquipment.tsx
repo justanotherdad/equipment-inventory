@@ -17,7 +17,7 @@ export default function RequestEquipment() {
   const [name, setName] = useState(() => localStorage.getItem('equipment-requester-name') || '');
   const [email, setEmail] = useState(() => localStorage.getItem('equipment-requester-email') || '');
   const [phone, setPhone] = useState(() => localStorage.getItem('equipment-requester-phone') || '');
-  const [equipmentId, setEquipmentId] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [building, setBuilding] = useState('');
   const [equipmentToTest, setEquipmentToTest] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -35,19 +35,33 @@ export default function RequestEquipment() {
       setEquipment(eq);
       setActiveSignOuts(new Set(signOuts.map((s: { equipment_id: number }) => s.equipment_id)));
       const available = eq.filter((e: Equipment) => !signOuts.some((s: { equipment_id: number }) => s.equipment_id === e.id));
-      if (available.length) setEquipmentId(available[0].id);
+      if (available.length) setSelectedIds((prev) => (prev.size === 0 ? new Set([available[0].id]) : prev));
     })();
   }, []);
 
   const availableEquipment = equipment.filter((e) => !activeSignOuts.has(e.id));
 
+  const toggleEquipment = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const validIds = Array.from(selectedIds).filter((id) => availableEquipment.some((e) => e.id === id));
+    if (validIds.length === 0) {
+      setError('Select at least one available equipment item.');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.equipmentRequests.create({
-        equipment_id: equipmentId,
+        equipment_ids: validIds,
         requester_name: name.trim(),
         requester_email: email.trim(),
         requester_phone: phone.trim(),
@@ -60,6 +74,7 @@ export default function RequestEquipment() {
       localStorage.setItem('equipment-requester-name', name.trim());
       localStorage.setItem('equipment-requester-email', email.trim());
       localStorage.setItem('equipment-requester-phone', phone.trim());
+      setSelectedIds(new Set());
       setBuilding('');
       setEquipmentToTest('');
       setDateFrom('');
@@ -105,16 +120,25 @@ export default function RequestEquipment() {
 
           <div className="form-group">
             <label>Equipment Requested *</label>
-            <select value={equipmentId} onChange={(e) => setEquipmentId(+e.target.value)} required>
-              <option value={0}>Select equipment...</option>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Select one or more items. {selectedIds.size > 0 && `${selectedIds.size} selected`}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 200, overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
               {availableEquipment.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.make} {e.model}
-                  {e.equipment_number ? ` (#${e.equipment_number})` : ` (S/N: ${e.serial_number})`}
-                  {e.equipment_type_name ? ` — ${e.equipment_type_name}` : ''}
-                </option>
+                <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: 6, background: selectedIds.has(e.id) ? 'var(--bg-primary)' : 'transparent' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(e.id)}
+                    onChange={() => toggleEquipment(e.id)}
+                  />
+                  <span style={{ fontSize: '0.9rem' }}>
+                    {e.make} {e.model}
+                    {e.equipment_number ? ` (#${e.equipment_number})` : ` (S/N: ${e.serial_number})`}
+                    {e.equipment_type_name ? ` — ${e.equipment_type_name}` : ''}
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
             {availableEquipment.length === 0 && equipment.length > 0 && (
               <p style={{ fontSize: '0.8rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
                 All equipment is currently in use. Check back later.
@@ -145,8 +169,8 @@ export default function RequestEquipment() {
 
           {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button type="submit" className="btn btn-primary" disabled={submitting || availableEquipment.length === 0}>
-              {submitting ? 'Submitting...' : 'Submit Request'}
+            <button type="submit" className="btn btn-primary" disabled={submitting || availableEquipment.length === 0 || selectedIds.size === 0}>
+              {submitting ? 'Submitting...' : `Submit Request${selectedIds.size > 0 ? ` (${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''})` : ''}`}
             </button>
           </div>
         </form>

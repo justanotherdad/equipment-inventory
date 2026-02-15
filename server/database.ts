@@ -451,6 +451,24 @@ export class Database {
     return all.filter((d) => allowed.includes(d.id));
   }
 
+  /** Sites the profile can access (for checkout form). Super/company admin see all; equipment managers see sites from their department access. */
+  async getSitesForProfile(profile?: Profile): Promise<{ id: number; name: string }[]> {
+    if (profile?.role === 'super_admin' || profile?.role === 'company_admin') {
+      const sites = await this.getSites(profile);
+      return sites.map((s) => ({ id: s.id, name: s.name }));
+    }
+    const depts = await this.getDepartmentsForProfile(profile);
+    const siteIds = [...new Set(depts.map((d) => d.site_id))];
+    if (siteIds.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from('sites')
+      .select('id, name')
+      .in('id', siteIds)
+      .order('name');
+    if (error) throw error;
+    return (data ?? []) as { id: number; name: string }[];
+  }
+
   async getEquipmentTypes(): Promise<EquipmentType[]> {
     const { data, error } = await this.supabase
       .from('equipment_types')
@@ -837,24 +855,94 @@ export class Database {
     equipment_number_to_test?: string;
     date_from?: string;
     date_to?: string;
+    checkout_id?: number;
+    room_number?: string;
   }): Promise<number> {
+    const payload: Record<string, unknown> = {
+      equipment_id: data.equipment_id,
+      signed_out_by: data.signed_out_by,
+      signed_out_at: new Date().toISOString(),
+      purpose: data.purpose ?? null,
+      equipment_request_id: data.equipment_request_id ?? null,
+      building: data.building ?? null,
+      equipment_number_to_test: data.equipment_number_to_test ?? null,
+      date_from: data.date_from ?? null,
+      date_to: data.date_to ?? null,
+    };
+    if (data.checkout_id != null) payload.checkout_id = data.checkout_id;
+    if (data.room_number != null) payload.room_number = data.room_number;
     const { data: inserted, error } = await this.supabase
       .from('sign_outs')
-      .insert({
-        equipment_id: data.equipment_id,
-        signed_out_by: data.signed_out_by,
-        signed_out_at: new Date().toISOString(),
-        purpose: data.purpose ?? null,
-        equipment_request_id: data.equipment_request_id ?? null,
-        building: data.building ?? null,
-        equipment_number_to_test: data.equipment_number_to_test ?? null,
-        date_from: data.date_from ?? null,
-        date_to: data.date_to ?? null,
-      })
+      .insert(payload)
       .select('id')
       .single();
     if (error) throw error;
     return inserted?.id ?? 0;
+  }
+
+  /** Create a batch checkout: one checkout record + N sign_outs. Validates equipment is available and profile has access. */
+  async createCheckout(
+    profile: Profile,
+    data: {
+      equipment_ids: number[];
+      site_id?: number | null;
+      building?: string | null;
+      room_number?: string | null;
+      equipment_number_to_test?: string | null;
+      signed_out_by: string;
+      purpose?: string | null;
+    }
+  ): Promise<{ checkout_id: number; sign_out_ids: number[] }> {
+    if (!data.equipment_ids?.length) throw new Error('At least one equipment is required');
+    if (!data.signed_out_by?.trim()) throw new Error('signed_out_by is required');
+
+    const allEquipment = await this.getAllEquipment(profile);
+    const equipMap = new Map(allEquipment.map((e) => [e.id, e]));
+    const activeSignOuts = await this.getActiveSignOuts(profile);
+    const activeIds = new Set(activeSignOuts.map((s) => s.equipment_id));
+
+    const validIds: number[] = [];
+    for (const id of data.equipment_ids) {
+      if (!equipMap.has(id)) throw new Error(`Equipment ${id} not found or access denied`);
+      if (activeIds.has(id)) throw new Error(`Equipment ${id} is already signed out`);
+      validIds.push(id);
+    }
+
+    const { data: checkoutRow, error: checkoutErr } = await this.supabase
+      .from('checkouts')
+      .insert({
+        site_id: data.site_id ?? null,
+        building: data.building ?? null,
+        room_number: data.room_number ?? null,
+        equipment_number_to_test: data.equipment_number_to_test ?? null,
+        signed_out_by: data.signed_out_by.trim(),
+        purpose: data.purpose ?? null,
+      })
+      .select('id')
+      .single();
+    if (checkoutErr) throw checkoutErr;
+    const checkoutId = checkoutRow?.id ?? 0;
+    if (!checkoutId) throw new Error('Failed to create checkout');
+
+    const purpose = data.purpose ?? null;
+    const building = data.building ?? null;
+    const roomNumber = data.room_number ?? null;
+    const equipNum = data.equipment_number_to_test ?? null;
+
+    const signOutIds: number[] = [];
+    for (const equipId of validIds) {
+      const id = await this.createSignOut({
+        equipment_id: equipId,
+        signed_out_by: data.signed_out_by.trim(),
+        purpose,
+        building,
+        equipment_number_to_test: equipNum,
+        room_number: roomNumber ?? undefined,
+        checkout_id: checkoutId,
+      });
+      signOutIds.push(id);
+    }
+    return { checkout_id: checkoutId, sign_out_ids: signOutIds };
   }
 
   async checkInSignOut(id: number, data: { signed_in_by: string }) {
@@ -1006,6 +1094,31 @@ export class Database {
       date_from: data.date_from,
       date_to: data.date_to,
     });
+    if (error) throw error;
+  }
+
+  async createEquipmentRequestsBatch(data: {
+    equipment_ids: number[];
+    requester_name: string;
+    requester_email: string;
+    requester_phone: string;
+    building: string;
+    equipment_number_to_test: string;
+    date_from: string;
+    date_to: string;
+  }) {
+    if (!data.equipment_ids?.length) throw new Error('At least one equipment is required');
+    const rows = data.equipment_ids.map((equipment_id) => ({
+      equipment_id,
+      requester_name: data.requester_name,
+      requester_email: data.requester_email,
+      requester_phone: data.requester_phone,
+      building: data.building,
+      equipment_number_to_test: data.equipment_number_to_test,
+      date_from: data.date_from,
+      date_to: data.date_to,
+    }));
+    const { error } = await this.supabase.from('equipment_requests').insert(rows);
     if (error) throw error;
   }
 

@@ -210,6 +210,25 @@ app.post('/api/sign-outs', async (req, res) => {
   }
 });
 
+app.get('/api/sites', async (req, res) => {
+  try {
+    const data = await db.getSitesForProfile(req.profile);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/checkouts', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const result = await db.createCheckout(req.profile, req.body);
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.post('/api/sign-outs/:id/check-in', async (req, res) => {
   try {
     await db.checkInSignOut(parseInt(req.params.id, 10), req.body);
@@ -359,7 +378,12 @@ app.get('/api/equipment-requests', async (req, res) => {
 
 app.post('/api/equipment-requests', async (req, res) => {
   try {
-    await db.createEquipmentRequest(req.body);
+    const body = req.body;
+    if (Array.isArray(body.equipment_ids)) {
+      await db.createEquipmentRequestsBatch(body);
+    } else {
+      await db.createEquipmentRequest(body);
+    }
     res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

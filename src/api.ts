@@ -95,6 +95,20 @@ export const api = {
     checkIn: (id: number, data: { signed_in_by: string }) =>
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
   },
+  sites: {
+    getAll: () => request<{ id: number; name: string }[]>('/api/sites'),
+  },
+  checkouts: {
+    create: (data: {
+      equipment_ids: number[];
+      site_id?: number | null;
+      building?: string | null;
+      room_number?: string | null;
+      equipment_number_to_test?: string | null;
+      signed_out_by: string;
+      purpose?: string | null;
+    }) => request<{ checkout_id: number; sign_out_ids: number[] }>('/api/checkouts', { method: 'POST', body: JSON.stringify(data) }),
+  },
   calibrationRecords: {
     getAll: () => request('/api/calibration-records'),
     getByEquipment: (equipmentId: number) => request(`/api/calibration-records/equipment/${equipmentId}`),
@@ -119,7 +133,8 @@ export const api = {
     getAll: (status?: 'pending' | 'approved' | 'rejected') =>
       request(`/api/equipment-requests${status ? `?status=${status}` : ''}`),
     create: (data: {
-      equipment_id: number;
+      equipment_id?: number;
+      equipment_ids?: number[];
       requester_name: string;
       requester_email: string;
       requester_phone: string;

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, LogIn, LogOut } from 'lucide-react';
+import { Plus, LogIn, LogOut, ScanBarcode } from 'lucide-react';
 import { format } from 'date-fns';
 import SignOutModal from '../components/SignOutModal';
 import CheckInModal from '../components/CheckInModal';
+import BatchCheckoutModal from '../components/BatchCheckoutModal';
 import BarcodeScanInput from '../components/BarcodeScanInput';
 import { api } from '../api';
 
@@ -26,6 +27,7 @@ export default function SignOuts() {
   const [allSignOuts, setAllSignOuts] = useState<SignOut[]>([]);
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const [showSignOut, setShowSignOut] = useState(false);
+  const [showBatchCheckout, setShowBatchCheckout] = useState(false);
   const [checkInSignOut, setCheckInSignOut] = useState<SignOut | null>(null);
   const [scanError, setScanError] = useState('');
   const [preSelectedEquipmentId, setPreSelectedEquipmentId] = useState<number | undefined>();
@@ -68,10 +70,16 @@ export default function SignOuts() {
           <h2>Sign-outs</h2>
           <p>Track equipment checked out for field use</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setPreSelectedEquipmentId(undefined); setShowSignOut(true); }}>
-          <Plus size={18} />
-          Sign Out Equipment
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => setShowBatchCheckout(true)}>
+            <ScanBarcode size={18} />
+            Scan & Checkout
+          </button>
+          <button className="btn btn-secondary" onClick={() => { setPreSelectedEquipmentId(undefined); setShowSignOut(true); }}>
+            <Plus size={18} />
+            Sign Out Single
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -198,6 +206,15 @@ export default function SignOuts() {
         )}
       </div>
 
+      {showBatchCheckout && (
+        <BatchCheckoutModal
+          onClose={() => setShowBatchCheckout(false)}
+          onSaved={() => {
+            setShowBatchCheckout(false);
+            load();
+          }}
+        />
+      )}
       {showSignOut && (
         <SignOutModal
           preSelectedEquipmentId={preSelectedEquipmentId}
