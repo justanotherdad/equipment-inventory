@@ -189,15 +189,19 @@ export class Database {
     return (data ?? []).map((r: { equipment_id: number }) => r.equipment_id).filter(Boolean);
   }
 
-  async getAllProfiles(adminProfile?: Profile): Promise<Profile[]> {
-    let q = this.supabase.from('profiles').select('*').order('email');
+  async getAllProfiles(adminProfile?: Profile): Promise<(Profile & { company_name?: string | null })[]> {
+    let q = this.supabase.from('profiles').select('*, companies(name)').order('email');
     if (adminProfile?.role === 'company_admin') {
       const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
       if (companyId) q = q.eq('company_id', companyId);
     }
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []) as Profile[];
+    return (data ?? []).map((r: Record<string, unknown>) => ({
+      ...r,
+      company_name: (r.companies as { name: string } | null)?.name ?? null,
+      companies: undefined,
+    })) as (Profile & { company_name?: string | null })[];
   }
 
   async createUserProfile(
@@ -205,16 +209,17 @@ export class Database {
     email: string,
     role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin',
     creatorProfile: Profile,
-    access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]
+    access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[],
+    companyId?: number | null
   ): Promise<Profile> {
-    const companyId = creatorProfile.role === 'company_admin' ? creatorProfile.company_id : null;
+    const assignedCompanyId = companyId ?? (creatorProfile.role === 'company_admin' ? creatorProfile.company_id : null);
     const { data: profile, error } = await this.supabase
       .from('profiles')
       .insert({
         auth_user_id: authUserId,
         email: email.toLowerCase(),
         role,
-        company_id: companyId ?? null,
+        company_id: assignedCompanyId ?? null,
       })
       .select()
       .single();
@@ -241,18 +246,56 @@ export class Database {
     if (error) throw error;
   }
 
+  async getProfileById(profileId: number): Promise<Profile | undefined> {
+    const { data, error } = await this.supabase.from('profiles').select('*').eq('id', profileId).single();
+    if (error || !data) return undefined;
+    return data as Profile;
+  }
+
+  async deleteProfile(profileId: number) {
+    await this.supabase.from('profile_access').delete().eq('profile_id', profileId);
+    const { error } = await this.supabase.from('profiles').delete().eq('id', profileId);
+    if (error) throw error;
+  }
+
   async getDefaultCompanyId(): Promise<number | null> {
     const { data } = await this.supabase.from('companies').select('id').limit(1).single();
     return data?.id ?? null;
   }
 
-  async getAllCompanies(): Promise<{ id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]> {
+  async getAllCompanies(): Promise<{ id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]> {
     const { data, error } = await this.supabase
       .from('companies')
-      .select('id, name, subscription_level, subscription_active, subscription_activated_at')
+      .select('id, name, contact_name, contact_email, contact_phone, address_line1, address_line2, address_city, address_state, address_zip, subscription_level, subscription_active, subscription_activated_at')
       .order('name');
     if (error) throw error;
-    return (data ?? []) as { id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[];
+    return (data ?? []) as { id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[];
+  }
+
+  async getCompanyById(id: number) {
+    const { data, error } = await this.supabase.from('companies').select('*').eq('id', id).single();
+    if (error || !data) return undefined;
+    return data as Record<string, unknown>;
+  }
+
+  async updateCompany(id: number, data: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }) {
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) payload.name = data.name;
+    if (data.contact_name !== undefined) payload.contact_name = data.contact_name;
+    if (data.contact_email !== undefined) payload.contact_email = data.contact_email;
+    if (data.contact_phone !== undefined) payload.contact_phone = data.contact_phone;
+    if (data.address_line1 !== undefined) payload.address_line1 = data.address_line1;
+    if (data.address_line2 !== undefined) payload.address_line2 = data.address_line2;
+    if (data.address_city !== undefined) payload.address_city = data.address_city;
+    if (data.address_state !== undefined) payload.address_state = data.address_state;
+    if (data.address_zip !== undefined) payload.address_zip = data.address_zip;
+    const { error } = await this.supabase.from('companies').update(payload).eq('id', id);
+    if (error) throw error;
+  }
+
+  async createCompany(name: string) {
+    const { error } = await this.supabase.from('companies').insert({ name });
+    if (error) throw error;
   }
 
   async updateCompanySubscription(companyId: number, subscriptionActive: boolean, subscriptionLevel?: number) {
@@ -273,31 +316,52 @@ export class Database {
     if (error) throw error;
   }
 
-  async getSites(adminProfile?: Profile): Promise<{ id: number; name: string; company_id?: number | null }[]> {
-    let q = this.supabase.from('sites').select('id, name, company_id').order('name');
+  async getSites(adminProfile?: Profile): Promise<{ id: number; name: string; company_id?: number | null; company_name?: string | null }[]> {
+    let q = this.supabase.from('sites').select('id, name, company_id, companies(name)').order('name');
     if (adminProfile?.role === 'company_admin') {
       const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
       if (companyId) q = q.eq('company_id', companyId);
     }
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []) as { id: number; name: string; company_id?: number | null }[];
+    return (data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id,
+      name: r.name,
+      company_id: r.company_id,
+      company_name: (r.companies as { name: string } | null)?.name ?? null,
+    })) as { id: number; name: string; company_id?: number | null; company_name?: string | null }[];
   }
 
-  async getDepartments(adminProfile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
+  async updateSite(id: number, name: string, companyId?: number | null) {
+    const payload: Record<string, unknown> = { name };
+    if (companyId !== undefined) payload.company_id = companyId;
+    const { error } = await this.supabase.from('sites').update(payload).eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteSite(id: number) {
+    const { error } = await this.supabase.from('sites').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async getDepartments(adminProfile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string; company_name?: string | null }[]> {
     let q = this.supabase
       .from('departments')
-      .select('id, site_id, name, sites(name, company_id)')
+      .select('id, site_id, name, sites(name, company_id, companies(name))')
       .order('name');
     const { data, error } = await q;
     if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id,
-      site_id: r.site_id,
-      name: r.name,
-      site_name: (r.sites as { name: string })?.name,
-      _company_id: (r.sites as { company_id?: number | null })?.company_id,
-    }));
+    let rows = (data ?? []).map((r: Record<string, unknown>) => {
+      const sites = r.sites as { name: string; company_id?: number | null; companies?: { name: string } | null } | null;
+      return {
+        id: r.id,
+        site_id: r.site_id,
+        name: r.name,
+        site_name: sites?.name,
+        _company_id: sites?.company_id,
+        company_name: sites?.companies?.name ?? null,
+      };
+    });
     if (adminProfile?.role === 'company_admin') {
       const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
       if (companyId) rows = rows.filter((r: { _company_id?: number | null }) => r._company_id === companyId);
@@ -305,7 +369,17 @@ export class Database {
     return rows.map((r: Record<string, unknown>) => {
       const { _company_id, ...rest } = r;
       return rest;
-    }) as { id: number; site_id: number; name: string; site_name?: string }[];
+    }) as { id: number; site_id: number; name: string; site_name?: string; company_name?: string | null }[];
+  }
+
+  async updateDepartment(id: number, name: string, siteId: number) {
+    const { error } = await this.supabase.from('departments').update({ name, site_id: siteId }).eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteDepartment(id: number) {
+    const { error } = await this.supabase.from('departments').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async getProfileAccess(profileId: number): Promise<{ site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[]> {

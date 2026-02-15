@@ -12,6 +12,7 @@ export interface Profile {
   display_name: string | null;
   phone: string | null;
   role: Role;
+  company_id?: number | null;
 }
 
 export interface AuthState {

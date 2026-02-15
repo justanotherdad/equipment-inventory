@@ -464,6 +464,23 @@ app.put('/api/admin/profiles/:id/access', adminOnly, async (req, res) => {
   }
 });
 
+app.delete('/api/admin/profiles/:id', adminOnly, async (req, res) => {
+  try {
+    const profileId = parseInt(req.params.id, 10);
+    const p = await db.getProfileById(profileId);
+    if (!p) return res.status(404).json({ error: 'Profile not found' });
+    await db.deleteProfile(profileId);
+    try {
+      await supabase.auth.admin.deleteUser(p.auth_user_id);
+    } catch {
+      // Auth user may already be deleted; ignore
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.get('/api/admin/sites', adminOnly, async (req, res) => {
   try {
     const data = await db.getSites(req.profile);
@@ -475,13 +492,37 @@ app.get('/api/admin/sites', adminOnly, async (req, res) => {
 
 app.post('/api/admin/sites', adminOnly, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, company_id } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
-    const companyId = req.profile?.role === 'company_admin'
-      ? (req.profile.company_id ?? await db.getDefaultCompanyId())
-      : null;
+    const companyId = req.profile?.role === 'super_admin' && company_id != null
+      ? Number(company_id)
+      : req.profile?.role === 'company_admin'
+        ? (req.profile.company_id ?? await db.getDefaultCompanyId())
+        : null;
     await db.createSite(name.trim(), companyId);
     res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.put('/api/admin/sites/:id', adminOnly, async (req, res) => {
+  try {
+    const { name, company_id } = req.body;
+    const id = parseInt(req.params.id, 10);
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    const companyId = req.profile?.role === 'super_admin' && company_id != null ? Number(company_id) : undefined;
+    await db.updateSite(id, name.trim(), companyId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.delete('/api/admin/sites/:id', adminOnly, async (req, res) => {
+  try {
+    await db.deleteSite(parseInt(req.params.id, 10));
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
@@ -516,12 +557,78 @@ app.post('/api/admin/departments', adminOnly, async (req, res) => {
   }
 });
 
+app.put('/api/admin/departments/:id', adminOnly, async (req, res) => {
+  try {
+    const { name, site_id } = req.body;
+    const id = parseInt(req.params.id, 10);
+    if (!name?.trim() || !site_id) return res.status(400).json({ error: 'name and site_id are required' });
+    await db.updateDepartment(id, name.trim(), parseInt(String(site_id), 10));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.delete('/api/admin/departments/:id', adminOnly, async (req, res) => {
+  try {
+    await db.deleteDepartment(parseInt(req.params.id, 10));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.get('/api/admin/companies', superAdminOnly, async (_req, res) => {
   try {
     const data = await db.getAllCompanies();
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/admin/companies/:id', adminOnly, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (req.profile?.role === 'company_admin' && req.profile.company_id !== id) return res.status(403).json({ error: 'Access denied' });
+    const company = await db.getCompanyById(id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json(company);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.put('/api/admin/companies/:id', adminOnly, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (req.profile?.role === 'company_admin' && req.profile.company_id !== id) return res.status(403).json({ error: 'Access denied' });
+    const { name, contact_name, contact_email, contact_phone, address_line1, address_line2, address_city, address_state, address_zip } = req.body;
+    await db.updateCompany(id, {
+      name,
+      contact_name,
+      contact_email,
+      contact_phone,
+      address_line1,
+      address_line2,
+      address_city,
+      address_state,
+      address_zip,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/admin/companies', superAdminOnly, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    await db.createCompany(name.trim());
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
@@ -539,8 +646,10 @@ app.put('/api/admin/companies/:id/subscription', superAdminOnly, async (req, res
 
 app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
   try {
-    const { email, password, access } = req.body;
+    const { email, password, access, role, company_id } = req.body;
     if (!email?.trim() || !password?.trim()) return res.status(400).json({ error: 'email and password are required' });
+    const allowedRoles = ['user', 'equipment_manager', 'company_admin', 'super_admin'] as const;
+    const assignedRole = allowedRoles.includes(role) ? role : 'user';
     const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password: password.trim(),
@@ -548,7 +657,14 @@ app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
     });
     if (authErr) return res.status(400).json({ error: authErr.message });
     if (!authUser?.user?.id) return res.status(500).json({ error: 'Failed to create user' });
-    const profile = await db.createUserProfile(authUser.user.id, email.trim().toLowerCase(), 'user', req.profile, Array.isArray(access) ? access : []);
+    const profile = await db.createUserProfile(
+      authUser.user.id,
+      email.trim().toLowerCase(),
+      assignedRole,
+      req.profile,
+      Array.isArray(access) ? access : [],
+      company_id != null ? Number(company_id) : undefined
+    );
     res.status(201).json({ id: profile.id, email: profile.email });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

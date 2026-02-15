@@ -32,21 +32,33 @@ export const api = {
     getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin' }>('/api/auth/me'),
   },
   admin: {
-    getProfiles: () => request<{ id: number; email: string; display_name: string | null; role: string }[]>('/api/admin/profiles'),
+    getProfiles: () => request<{ id: number; email: string; display_name: string | null; role: string; company_name?: string | null }[]>('/api/admin/profiles'),
     updateProfileRole: (id: number, role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin') =>
       request(`/api/admin/profiles/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+    deleteProfile: (id: number) => request(`/api/admin/profiles/${id}`, { method: 'DELETE' }),
     getProfileAccess: (id: number) =>
       request<{ site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[]>(`/api/admin/profiles/${id}/access`),
     setProfileAccess: (id: number, access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) =>
       request(`/api/admin/profiles/${id}/access`, { method: 'PUT', body: JSON.stringify({ access }) }),
-    getSites: () => request<{ id: number; name: string }[]>('/api/admin/sites'),
-    createSite: (name: string) => request('/api/admin/sites', { method: 'POST', body: JSON.stringify({ name }) }),
-    getDepartments: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/admin/departments'),
+    getSites: () => request<{ id: number; name: string; company_id?: number | null; company_name?: string | null }[]>('/api/admin/sites'),
+    createSite: (name: string, companyId?: number) =>
+      request('/api/admin/sites', { method: 'POST', body: JSON.stringify({ name, company_id: companyId }) }),
+    updateSite: (id: number, data: { name: string; company_id?: number | null }) =>
+      request(`/api/admin/sites/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteSite: (id: number) => request(`/api/admin/sites/${id}`, { method: 'DELETE' }),
+    getDepartments: () => request<{ id: number; site_id: number; name: string; site_name?: string; company_name?: string | null }[]>('/api/admin/departments'),
     createDepartment: (siteId: number, name: string) =>
       request('/api/admin/departments', { method: 'POST', body: JSON.stringify({ site_id: siteId, name }) }),
-    createUser: (email: string, password: string, access?: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) =>
-      request('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, access: access ?? [] }) }),
-    getCompanies: () => request<{ id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]>('/api/admin/companies'),
+    updateDepartment: (id: number, data: { name: string; site_id: number }) =>
+      request(`/api/admin/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteDepartment: (id: number) => request(`/api/admin/departments/${id}`, { method: 'DELETE' }),
+    createUser: (email: string, password: string, access?: { site_id: number; department_id?: number | null; equipment_id?: number | null }[], role?: string, companyId?: number) =>
+      request('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, access: access ?? [], role, company_id: companyId }) }),
+    getCompanies: () => request<{ id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]>('/api/admin/companies'),
+    getCompany: (id: number) => request<{ id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }>(`/api/admin/companies/${id}`),
+    updateCompany: (id: number, data: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }) =>
+      request(`/api/admin/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    createCompany: (name: string) => request('/api/admin/companies', { method: 'POST', body: JSON.stringify({ name }) }),
     updateCompanySubscription: (id: number, subscriptionActive: boolean, subscriptionLevel?: number) =>
       request(`/api/admin/companies/${id}/subscription`, { method: 'PUT', body: JSON.stringify({ subscription_active: subscriptionActive, subscription_level: subscriptionLevel }) }),
   },
