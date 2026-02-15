@@ -367,8 +367,8 @@ export default function Admin() {
       {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
 
       {isFullAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: (isSuperAdmin || profile?.role === 'company_admin') ? 'minmax(280px, 1fr) minmax(340px, 1fr)' : '1fr', gap: '1rem', marginBottom: '1.5rem', alignItems: 'start' }}>
-          {/* Company Info - Column 1 */}
+        <div style={{ display: 'grid', gridTemplateColumns: (isSuperAdmin || profile?.role === 'company_admin') ? '1fr 1fr' : '1fr', gridTemplateRows: 'auto auto', gap: '1rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+          {/* Row 1, Col 1: Company Info */}
           {(isSuperAdmin || profile?.role === 'company_admin') && (
             <div className="card company-info-compact">
               <h3 className="card-title"><Building2 size={20} /> Company Info</h3>
@@ -475,10 +475,8 @@ export default function Admin() {
             </div>
           )}
 
-          {/* Column 2: Create User + Users & Access stacked */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Create User */}
-          <div className="card">
+          {/* Row 1, Col 2: Create User */}
+          <div className="card" style={{ gridColumn: (isSuperAdmin || profile?.role === 'company_admin') ? 2 : 1 }}>
             <h3 className="card-title"><Users size={20} /> Create User</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               Create a new user account. They can sign in with the email and password you set.
@@ -555,8 +553,8 @@ export default function Admin() {
             </form>
           </div>
 
-          {/* Users & Access */}
-          <div className="card">
+          {/* Row 2: Users & Access (full width) */}
+          <div className="card" style={{ gridColumn: '1 / -1' }}>
             <h3 className="card-title"><Users size={20} /> Users & Access</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               Set role and assign site/department access. Click row to expand access.
@@ -588,7 +586,6 @@ export default function Admin() {
               )}
               emptyMessage="No users"
             />
-          </div>
           </div>
         </div>
       )}
