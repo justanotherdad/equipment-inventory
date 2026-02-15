@@ -597,6 +597,47 @@ export default function Admin() {
             />
           </div>
 
+          {/* Subscriptions - Super Admin (above Users & Access) */}
+          {isSuperAdmin && (
+            <div className="card admin-subscriptions-col">
+              <div className="admin-subscriptions-header">
+                <div>
+                  <h3 className="card-title"><CreditCard size={20} /> Subscriptions</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                    Enable or disable subscription per company. Level 1–4 controls limits.
+                  </p>
+                </div>
+                <button type="button" className="btn btn-primary" onClick={() => setAddCompanyModal(true)}>Add Company</button>
+              </div>
+              <AdminTable
+                columns={[
+                  { key: 'name', label: 'Company', value: (r) => r.name },
+                  { key: 'contact_name', label: 'Contact', value: (r) => r.contact_name ?? '' },
+                  { key: 'contact_email', label: 'Email', value: (r) => r.contact_email ?? '' },
+                  { key: 'status', label: 'Status', render: (r) => (r.subscription_active ? 'Active' : 'Disabled') },
+                  { key: 'subscription_level', label: 'Level', render: (r) => `Level ${r.subscription_level}` },
+                  { key: 'active', label: 'Active', render: (r) => (
+                    <input type="checkbox" checked={r.subscription_active} onChange={(e) => handleSubscriptionToggle(r.id, e.target.checked)} />
+                  )},
+                ]}
+                data={companies}
+                searchPlaceholder="Search subscriptions…"
+                searchKeys={['name', 'contact_name', 'contact_email']}
+                renderActions={(row) => (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                    onClick={() => { setEditSubscriptionModal(row); setEditSubscriptionForm(row); }}
+                  >
+                    <Pencil size={14} /> Edit
+                  </button>
+                )}
+                emptyMessage="No companies"
+              />
+            </div>
+          )}
+
           {/* Row 2: Users & Access (full width) */}
           <div className="card admin-users-access">
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -650,47 +691,6 @@ export default function Admin() {
             </button>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: 0.5 }}>Add users within your access scope.</p>
-        </div>
-      )}
-
-      {/* Subscriptions - Super Admin */}
-      {isSuperAdmin && (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <div className="admin-subscriptions-header">
-            <div>
-              <h3 className="card-title"><CreditCard size={20} /> Subscriptions</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
-                Enable or disable subscription per company. Level 1–4 controls limits.
-              </p>
-            </div>
-            <button type="button" className="btn btn-primary" onClick={() => setAddCompanyModal(true)}>Add Company</button>
-          </div>
-          <AdminTable
-            columns={[
-              { key: 'name', label: 'Company', value: (r) => r.name },
-              { key: 'contact_name', label: 'Contact', value: (r) => r.contact_name ?? '' },
-              { key: 'contact_email', label: 'Email', value: (r) => r.contact_email ?? '' },
-              { key: 'status', label: 'Status', render: (r) => (r.subscription_active ? 'Active' : 'Disabled') },
-              { key: 'subscription_level', label: 'Level', render: (r) => `Level ${r.subscription_level}` },
-              { key: 'active', label: 'Active', render: (r) => (
-                <input type="checkbox" checked={r.subscription_active} onChange={(e) => handleSubscriptionToggle(r.id, e.target.checked)} />
-              )},
-            ]}
-            data={companies}
-            searchPlaceholder="Search subscriptions…"
-            searchKeys={['name', 'contact_name', 'contact_email']}
-            renderActions={(row) => (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                onClick={() => { setEditSubscriptionModal(row); setEditSubscriptionForm(row); }}
-              >
-                <Pencil size={14} /> Edit
-              </button>
-            )}
-            emptyMessage="No companies"
-          />
         </div>
       )}
 

@@ -208,6 +208,10 @@ html, body {
   grid-column: 1;
 }
 
+.admin-subscriptions-col {
+  grid-column: 1 / -1;
+}
+
 .admin-users-access {
   grid-column: 1 / -1;
 }
@@ -234,11 +238,12 @@ html, body {
 
 .admin-sites-depts-grid .card {
   min-width: 0;
+  width: 75%;
 }
 
 @media (min-width: 768px) {
   .admin-sites-depts-grid {
-    grid-template-columns: minmax(260px, 0.45fr) minmax(360px, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
