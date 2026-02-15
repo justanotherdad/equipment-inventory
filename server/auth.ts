@@ -13,7 +13,8 @@ export interface Profile {
   email: string;
   display_name: string | null;
   phone: string | null;
-  role: 'user' | 'equipment_manager' | 'admin';
+  role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
+  company_id?: number | null;
 }
 
 declare global {

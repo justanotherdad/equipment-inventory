@@ -29,21 +29,26 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   setAuthToken,
   auth: {
-    getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'admin' }>('/api/auth/me'),
+    getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin' }>('/api/auth/me'),
   },
   admin: {
     getProfiles: () => request<{ id: number; email: string; display_name: string | null; role: string }[]>('/api/admin/profiles'),
-    updateProfileRole: (id: number, role: 'user' | 'equipment_manager' | 'admin') =>
+    updateProfileRole: (id: number, role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin') =>
       request(`/api/admin/profiles/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
     getProfileAccess: (id: number) =>
-      request<{ site_id: number; department_id: number | null; site_name?: string; department_name?: string }[]>(`/api/admin/profiles/${id}/access`),
-    setProfileAccess: (id: number, access: { site_id: number; department_id?: number | null }[]) =>
+      request<{ site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[]>(`/api/admin/profiles/${id}/access`),
+    setProfileAccess: (id: number, access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) =>
       request(`/api/admin/profiles/${id}/access`, { method: 'PUT', body: JSON.stringify({ access }) }),
     getSites: () => request<{ id: number; name: string }[]>('/api/admin/sites'),
     createSite: (name: string) => request('/api/admin/sites', { method: 'POST', body: JSON.stringify({ name }) }),
     getDepartments: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/admin/departments'),
     createDepartment: (siteId: number, name: string) =>
       request('/api/admin/departments', { method: 'POST', body: JSON.stringify({ site_id: siteId, name }) }),
+    createUser: (email: string, password: string, access?: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) =>
+      request('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, access: access ?? [] }) }),
+    getCompanies: () => request<{ id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]>('/api/admin/companies'),
+    updateCompanySubscription: (id: number, subscriptionActive: boolean, subscriptionLevel?: number) =>
+      request(`/api/admin/companies/${id}/subscription`, { method: 'PUT', body: JSON.stringify({ subscription_active: subscriptionActive, subscription_level: subscriptionLevel }) }),
   },
   departments: {
     getAll: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/departments'),
@@ -63,6 +68,7 @@ export const api = {
     getCalibrationStatus: () => request('/api/equipment/calibration-status'),
     create: (data: object) => request('/api/equipment', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: object) => request(`/api/equipment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    bulkUpdate: (ids: number[], data: object) => request('/api/equipment/bulk', { method: 'PUT', body: JSON.stringify({ ids, ...data }) }),
     delete: (id: number) => request(`/api/equipment/${id}`, { method: 'DELETE' }),
   },
   signOuts: {

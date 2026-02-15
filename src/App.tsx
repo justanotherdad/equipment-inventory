@@ -43,9 +43,11 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const filteredNavItems = profile.role === 'admin'
+  const filteredNavItems = (profile.role === 'super_admin' || profile.role === 'company_admin')
     ? navItems
-    : navItems.filter((item) => item.to !== '/admin');
+    : (profile.role === 'equipment_manager'
+      ? navItems.map((item) => item.to === '/admin' ? { ...item, label: 'Create User' } : item)
+      : navItems.filter((item) => item.to !== '/admin'));
 
   return (
     <div className="app-layout">

@@ -23,7 +23,8 @@ This guide uses **Supabase** for database and file storage, so you can run on Re
 3. Copy the contents of `supabase/schema.sql` from this project and run it
 4. Run a second query with the contents of `supabase/schema-v2-requests.sql` (adds equipment requests)
 5. Run a third query with the contents of `supabase/schema-v3-auth-access.sql` (adds auth, sites, departments, access control)
-6. You should see "Success. No rows returned" for each
+6. Run a fourth query with the contents of `supabase/schema-v4-roles-subscription.sql` (roles, companies, subscription levels)
+7. You should see "Success. No rows returned" for each
 
 ### Step 3: Create the Storage Bucket
 
@@ -68,7 +69,19 @@ This guide uses **Supabase** for database and file storage, so you can run on Re
 
 ### Step 3: Add Environment Variables
 
-In the **Environment** section, add:
+1. In Render, open your **equipment-inventory** service
+2. Click **Environment** in the left sidebar
+3. Click **Add Environment Variable**
+4. Add each variable below (Key and Value)
+
+**How to add SUPER_ADMIN_EMAIL:**
+- Click **Add Environment Variable**
+- **Key:** `SUPER_ADMIN_EMAIL`
+- **Value:** Your email (e.g. `david.fletes@ctg-gmp.com`)
+- Click **Save Changes**
+- Trigger a new deploy: **Manual Deploy** → **Deploy latest commit**
+
+**Full list:**
 
 | Key | Value |
 |-----|-------|
@@ -76,7 +89,8 @@ In the **Environment** section, add:
 | `SUPABASE_SERVICE_KEY` | Your Supabase service_role key |
 | `SUPABASE_ANON_KEY` | Your Supabase anon key (for auth) |
 | `SUPABASE_STORAGE_BUCKET` | `calibration-records` (optional – this is the default) |
-| `ADMIN_EMAIL` | Your email – you become admin on first login (optional) |
+| `SUPER_ADMIN_EMAIL` | Your email – you become super admin on first login |
+| `ADMIN_EMAIL` | Same as SUPER_ADMIN_EMAIL (legacy, optional) |
 
 For the **client** (Vite), add these in Render's environment (they are passed at build time):
 
@@ -129,3 +143,25 @@ The server loads credentials from `.env` automatically.
 - **Free tier**: The Render service sleeps after ~15 minutes of inactivity. The first request may take 30–60 seconds.
 - **Supabase free tier**: 500MB database, 1GB file storage – enough for typical use.
 - **No disk needed**: Database and PDFs are stored in Supabase, not on Render.
+
+---
+
+## Subscription Levels (schema-v4)
+
+| Level | Sites | Depts/Site | Eq Managers | Users |
+|-------|-------|------------|-------------|-------|
+| 1 | 1 | 2 | 2 | 20 |
+| 2 | 2 | 4 | 3 | 50 |
+| 3 | 5 | 3 | 10 | 200 |
+| 4 (enterprise) | 10 | 5 | 20 | 500 |
+
+---
+
+## Remaining Work
+
+- [x] **Subscription activation** – Super admin UI to enable/disable subscription per company
+- [x] **Company admin portal** – Company-scoped admin for company admins (profiles, sites, departments filtered by company)
+- [x] **Equipment bulk edit** – Checkbox column and bulk edit action on Equipment list
+- [x] **User request history** – Users see only their own requests (Request Queue shows "My Requests")
+- [x] **Equipment manager user creation** – Equipment managers can add users via Create User with access within their scope
+- [x] **Auto-check new equipment** – New equipment in a department is auto-added to profile_access for users with equipment-level access in that department

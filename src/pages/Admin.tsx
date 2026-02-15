@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
 import { Navigate } from 'react-router-dom';
-import { Users, Building2, FolderTree, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Building2, FolderTree, ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
+import AccessCheckboxes from '../components/AccessCheckboxes';
 
-type Role = 'user' | 'equipment_manager' | 'admin';
+type Role = 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
 
 interface Profile {
   id: number;
@@ -25,11 +26,28 @@ interface Department {
   site_name?: string;
 }
 
+interface Equipment {
+  id: number;
+  department_id: number | null;
+  make: string;
+  model: string;
+  serial_number: string;
+}
+
 interface ProfileAccess {
   site_id: number;
   department_id: number | null;
+  equipment_id?: number | null;
   site_name?: string;
   department_name?: string;
+}
+
+interface Company {
+  id: number;
+  name: string;
+  subscription_level: number;
+  subscription_active: boolean;
+  subscription_activated_at: string | null;
 }
 
 export default function Admin() {
@@ -37,6 +55,7 @@ export default function Admin() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedProfile, setExpandedProfile] = useState<number | null>(null);
@@ -44,22 +63,51 @@ export default function Admin() {
   const [newSiteName, setNewSiteName] = useState('');
   const [newDeptSiteId, setNewDeptSiteId] = useState('');
   const [newDeptName, setNewDeptName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserAccess, setNewUserAccess] = useState<{ site_id: number; department_id: number | null; equipment_id?: number | null }[]>([]);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
-  if (profile?.role !== 'admin') return <Navigate to="/" replace />;
+  const isFullAdmin = profile?.role === 'super_admin' || profile?.role === 'company_admin';
+  const canCreateUser = isFullAdmin || profile?.role === 'equipment_manager';
+  if (!canCreateUser) return <Navigate to="/" replace />;
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const [p, s, d] = await Promise.all([
-        api.admin.getProfiles(),
-        api.admin.getSites(),
-        api.admin.getDepartments(),
-      ]);
-      setProfiles(p);
-      setSites(s);
-      setDepartments(d);
-      if (s.length && !newDeptSiteId) setNewDeptSiteId(String(s[0].id));
+      if (isFullAdmin) {
+        const promises: Promise<unknown>[] = [
+          api.admin.getProfiles(),
+          api.admin.getSites(),
+          api.admin.getDepartments(),
+          api.equipment.getAll(),
+        ];
+        if (profile?.role === 'super_admin') {
+          promises.push(api.admin.getCompanies());
+        }
+        const results = await Promise.all(promises);
+        setProfiles(results[0] as Profile[]);
+        setSites(results[1] as Site[]);
+        setDepartments(results[2] as Department[]);
+        setEquipment((results[3] as { id: number; department_id: number | null; make: string; model: string; serial_number: string }[]) ?? []);
+        const s = results[1] as Site[];
+        if (s.length && !newDeptSiteId) setNewDeptSiteId(String(s[0].id));
+        if (profile?.role === 'super_admin' && results[4]) {
+          setCompanies(results[4] as Company[]);
+        }
+      } else {
+        const [d, eq] = await Promise.all([
+          api.departments.getAll(),
+          api.equipment.getAll(),
+        ]);
+        const depts = d as { id: number; site_id: number; name: string; site_name?: string }[];
+        const sitesFromDepts = [...new Map(depts.map((x) => [x.site_id, { id: x.site_id, name: x.site_name || `Site ${x.site_id}` }])).values()];
+        setSites(sitesFromDepts);
+        setDepartments(depts);
+        setEquipment((eq as { id: number; department_id: number | null; make: string; model: string; serial_number: string }[]) ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -68,8 +116,8 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profile) load();
+  }, [profile?.role]);
 
   const loadProfileAccess = async (profileId: number) => {
     try {
@@ -98,7 +146,7 @@ export default function Admin() {
     }
   };
 
-  const handleSetAccess = async (profileId: number, access: { site_id: number; department_id?: number | null }[]) => {
+  const handleSetAccess = async (profileId: number, access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) => {
     try {
       await api.admin.setProfileAccess(profileId, access);
       setProfileAccess((prev) => ({
@@ -109,6 +157,7 @@ export default function Admin() {
           return {
             site_id: a.site_id,
             department_id: a.department_id ?? null,
+            equipment_id: a.equipment_id ?? null,
             site_name: site?.name,
             department_name: dept?.name,
           };
@@ -131,6 +180,43 @@ export default function Admin() {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserEmail.trim() || !newUserPassword.trim()) return;
+    if (newUserPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    setCreatingUser(true);
+    setError('');
+    try {
+      await api.admin.createUser(newUserEmail.trim(), newUserPassword.trim(), newUserAccess);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserAccess([]);
+      if (isFullAdmin) load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create user');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const handleSubscriptionToggle = async (companyId: number, active: boolean, level?: number) => {
+    try {
+      await api.admin.updateCompanySubscription(companyId, active, level);
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === companyId
+            ? { ...c, subscription_active: active, subscription_level: level ?? c.subscription_level, subscription_activated_at: active ? new Date().toISOString() : c.subscription_activated_at }
+            : c
+        )
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update subscription');
+    }
+  };
+
   const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptSiteId || !newDeptName.trim()) return;
@@ -143,36 +229,68 @@ export default function Admin() {
     }
   };
 
-  const addAccessRow = (profileId: number) => {
-    const current = profileAccess[profileId] ?? [];
-    const siteId = sites[0]?.id ?? 0;
-    if (!siteId) return;
-    handleSetAccess(profileId, [...current, { site_id: siteId }]);
-  };
-
-  const removeAccessRow = (profileId: number, idx: number) => {
-    const current = profileAccess[profileId] ?? [];
-    const next = current.filter((_, i) => i !== idx);
-    handleSetAccess(profileId, next.map((a) => ({ site_id: a.site_id, department_id: a.department_id })));
-  };
-
-  const updateAccessRow = (profileId: number, idx: number, siteId: number, departmentId: number | null) => {
-    const current = profileAccess[profileId] ?? [];
-    const next = [...current];
-    next[idx] = { ...next[idx], site_id: siteId, department_id: departmentId };
-    handleSetAccess(profileId, next.map((a) => ({ site_id: a.site_id, department_id: a.department_id })));
-  };
-
   if (loading) return <div className="page-header"><p>Loading…</p></div>;
 
   return (
     <div>
       <div className="page-header">
-        <h2>Admin Panel</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Manage users, access levels, sites, and departments.</p>
+        <h2>{isFullAdmin ? 'Admin Panel' : 'Create User'}</h2>
+        <p style={{ color: 'var(--text-muted)' }}>
+          {isFullAdmin ? 'Manage users, access levels, sites, and departments.' : 'Add a new user within your access scope.'}
+        </p>
       </div>
       {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
 
+      {canCreateUser && (
+        <div className="card">
+          <h3 className="card-title">Create User</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            Create a new user account. They can sign in with the email and password you set.
+          </p>
+          <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 400 }}>
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                placeholder="user@example.com"
+                required
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                required
+                minLength={6}
+                style={{ width: '100%' }}
+              />
+            </div>
+            {profile?.role === 'equipment_manager' && (
+              <div>
+                <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access (within your scope)</label>
+                <AccessCheckboxes
+                  sites={sites}
+                  departments={departments}
+                  equipment={equipment}
+                  access={newUserAccess}
+                  onSave={setNewUserAccess}
+                />
+              </div>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={creatingUser}>
+              {creatingUser ? 'Creating…' : 'Create User'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {isFullAdmin && (
       <div className="card">
         <h3 className="card-title"><Users size={20} /> Users & Access</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
@@ -211,40 +329,27 @@ export default function Admin() {
                     >
                       <option value="user">User</option>
                       <option value="equipment_manager">Equipment Manager</option>
-                      <option value="admin">Admin</option>
+                      <option value="company_admin">Company Admin</option>
+                      <option value="super_admin">Super Admin</option>
                     </select>
                   </div>
                   {(p.role === 'user' || p.role === 'equipment_manager') && (
                     <div>
-                      <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Site / Department Access</label>
+                      <label style={{ display: 'block', marginBottom: 0.25, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Site / Department / Equipment Access</label>
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                        Add site-wide (leave department blank) or department-specific access.
+                        Check sites for full site access, or drill down to departments and specific equipment.
                       </p>
-                      {(profileAccess[p.id] ?? []).map((a, idx) => (
-                        <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                          <select
-                            value={a.site_id}
-                            onChange={(e) => updateAccessRow(p.id, idx, parseInt(e.target.value, 10), a.department_id)}
-                            style={{ padding: '0.4rem', borderRadius: 6, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'inherit', flex: 1 }}
-                          >
-                            {sites.map((s) => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={a.department_id ?? ''}
-                            onChange={(e) => updateAccessRow(p.id, idx, a.site_id, e.target.value ? parseInt(e.target.value, 10) : null)}
-                            style={{ padding: '0.4rem', borderRadius: 6, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'inherit', flex: 1 }}
-                          >
-                            <option value="">Entire site</option>
-                            {departments.filter((d) => d.site_id === a.site_id).map((d) => (
-                              <option key={d.id} value={d.id}>{d.name}</option>
-                            ))}
-                          </select>
-                          <button type="button" className="btn btn-danger" style={{ padding: '0.4rem 0.5rem' }} onClick={() => removeAccessRow(p.id, idx)}>Remove</button>
-                        </div>
-                      ))}
-                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={() => addAccessRow(p.id)}>+ Add access</button>
+                      <AccessCheckboxes
+                        sites={sites}
+                        departments={departments}
+                        equipment={equipment}
+                        access={(profileAccess[p.id] ?? []).map((a) => ({
+                          site_id: a.site_id,
+                          department_id: a.department_id,
+                          equipment_id: a.equipment_id ?? null,
+                        }))}
+                        onSave={(rows) => handleSetAccess(p.id, rows)}
+                      />
                     </div>
                   )}
                 </div>
@@ -253,7 +358,66 @@ export default function Admin() {
           ))}
         </div>
       </div>
+      )}
 
+      {profile?.role === 'super_admin' && companies.length > 0 && (
+        <div className="card">
+          <h3 className="card-title"><CreditCard size={20} /> Subscription</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+            Enable or disable subscription per company. Level 1–4 controls limits (sites, departments, users).
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {companies.map((c) => (
+              <div
+                key={c.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  padding: '0.75rem',
+                  background: 'var(--bg-tertiary)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div>
+                  <strong>{c.name}</strong>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Level {c.subscription_level} • {c.subscription_active ? 'Active' : 'Disabled'}
+                    {c.subscription_activated_at && (
+                      <span> • Activated {new Date(c.subscription_activated_at).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <select
+                    value={c.subscription_level}
+                    onChange={(e) => handleSubscriptionToggle(c.id, c.subscription_active, parseInt(e.target.value, 10))}
+                    style={{ padding: '0.4rem 0.5rem', borderRadius: 6, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'inherit' }}
+                  >
+                    <option value={1}>Level 1</option>
+                    <option value={2}>Level 2</option>
+                    <option value={3}>Level 3</option>
+                    <option value={4}>Level 4</option>
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={c.subscription_active}
+                      onChange={(e) => handleSubscriptionToggle(c.id, e.target.checked)}
+                    />
+                    Active
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isFullAdmin && (
       <div className="card">
         <h3 className="card-title"><Building2 size={20} /> Sites</h3>
         <form onSubmit={handleAddSite} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -272,7 +436,9 @@ export default function Admin() {
           ))}
         </ul>
       </div>
+      )}
 
+      {isFullAdmin && (
       <div className="card">
         <h3 className="card-title"><FolderTree size={20} /> Departments</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
@@ -303,6 +469,7 @@ export default function Admin() {
           ))}
         </ul>
       </div>
+      )}
     </div>
   );
 }

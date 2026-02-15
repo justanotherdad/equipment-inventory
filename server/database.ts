@@ -81,7 +81,8 @@ export interface Profile {
   email: string;
   display_name: string | null;
   phone: string | null;
-  role: 'user' | 'equipment_manager' | 'admin';
+  role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
+  company_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -110,13 +111,16 @@ export class Database {
     return data as Profile;
   }
 
-  async upsertProfile(authUserId: string, email: string, role: 'user' | 'equipment_manager' | 'admin'): Promise<Profile> {
+  async upsertProfile(authUserId: string, email: string, role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin'): Promise<Profile> {
     const existing = await this.getProfileByAuthUserId(authUserId);
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
     const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-    const isAdminEmail = adminEmail && email.toLowerCase() === adminEmail;
+    const emailLower = email.toLowerCase();
+    const isSuperAdmin = superAdminEmail && emailLower === superAdminEmail;
+    const isAdminEmail = !isSuperAdmin && adminEmail && emailLower === adminEmail;
 
     if (existing) {
-      const newRole = isAdminEmail ? 'admin' : existing.role;
+      const newRole = isSuperAdmin ? 'super_admin' : isAdminEmail ? 'super_admin' : existing.role;
       const { data, error } = await this.supabase
         .from('profiles')
         .update({
@@ -136,7 +140,7 @@ export class Database {
       .insert({
         auth_user_id: authUserId,
         email,
-        role: isAdminEmail ? 'admin' : role,
+        role: isSuperAdmin || isAdminEmail ? 'super_admin' : role,
       })
       .select()
       .single();
@@ -144,20 +148,23 @@ export class Database {
     return data as Profile;
   }
 
-  /** Returns department IDs the profile can access. Null = no filter (admin). */
+  /** Returns department IDs the profile can access. Null = no filter (super_admin/company_admin). */
   async getAllowedDepartmentIds(profile: Profile): Promise<number[] | null> {
-    if (profile.role === 'admin') return null;
+    if (profile.role === 'super_admin' || profile.role === 'company_admin') return null;
 
     const { data: accessRows, error } = await this.supabase
       .from('profile_access')
-      .select('site_id, department_id')
+      .select('site_id, department_id, equipment_id')
       .eq('profile_id', profile.id);
     if (error) throw error;
     if (!accessRows?.length) return []; // No access = see nothing
 
     const deptIds: number[] = [];
-    for (const row of accessRows as { site_id: number; department_id: number | null }[]) {
-      if (row.department_id) {
+    for (const row of accessRows as { site_id: number; department_id: number | null; equipment_id?: number | null }[]) {
+      if (row.equipment_id) {
+        const { data: eq } = await this.supabase.from('equipment').select('department_id').eq('id', row.equipment_id).single();
+        if (eq?.department_id) deptIds.push(eq.department_id);
+      } else if (row.department_id) {
         deptIds.push(row.department_id);
       } else {
         const { data: depts } = await this.supabase
@@ -170,16 +177,63 @@ export class Database {
     return [...new Set(deptIds)];
   }
 
-  async getAllProfiles(): Promise<Profile[]> {
+  /** Returns equipment IDs the profile has equipment-level access to. Empty = no equipment-level restriction. */
+  async getAllowedEquipmentIds(profile: Profile): Promise<number[]> {
+    if (profile.role === 'super_admin' || profile.role === 'company_admin') return [];
     const { data, error } = await this.supabase
-      .from('profiles')
-      .select('*')
-      .order('email');
+      .from('profile_access')
+      .select('equipment_id')
+      .eq('profile_id', profile.id)
+      .not('equipment_id', 'is', null);
+    if (error) throw error;
+    return (data ?? []).map((r: { equipment_id: number }) => r.equipment_id).filter(Boolean);
+  }
+
+  async getAllProfiles(adminProfile?: Profile): Promise<Profile[]> {
+    let q = this.supabase.from('profiles').select('*').order('email');
+    if (adminProfile?.role === 'company_admin') {
+      const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
+      if (companyId) q = q.eq('company_id', companyId);
+    }
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []) as Profile[];
   }
 
-  async updateProfileRole(profileId: number, role: 'user' | 'equipment_manager' | 'admin') {
+  async createUserProfile(
+    authUserId: string,
+    email: string,
+    role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin',
+    creatorProfile: Profile,
+    access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]
+  ): Promise<Profile> {
+    const companyId = creatorProfile.role === 'company_admin' ? creatorProfile.company_id : null;
+    const { data: profile, error } = await this.supabase
+      .from('profiles')
+      .insert({
+        auth_user_id: authUserId,
+        email: email.toLowerCase(),
+        role,
+        company_id: companyId ?? null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    if (access.length > 0 && (profile as Profile).id) {
+      let filtered = access;
+      if (creatorProfile.role === 'equipment_manager' || creatorProfile.role === 'company_admin') {
+        const creatorAccess = await this.getProfileAccess(creatorProfile.id);
+        const siteIds = new Set(creatorAccess.map((a) => a.site_id));
+        filtered = access.filter((a) => siteIds.has(a.site_id));
+      }
+      if (filtered.length > 0) {
+        await this.setProfileAccess((profile as Profile).id, filtered);
+      }
+    }
+    return profile as Profile;
+  }
+
+  async updateProfileRole(profileId: number, role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin') {
     const { error } = await this.supabase
       .from('profiles')
       .update({ role, updated_at: new Date().toISOString() })
@@ -187,54 +241,103 @@ export class Database {
     if (error) throw error;
   }
 
-  async getSites(): Promise<{ id: number; name: string }[]> {
-    const { data, error } = await this.supabase.from('sites').select('id, name').order('name');
-    if (error) throw error;
-    return (data ?? []) as { id: number; name: string }[];
+  async getDefaultCompanyId(): Promise<number | null> {
+    const { data } = await this.supabase.from('companies').select('id').limit(1).single();
+    return data?.id ?? null;
   }
 
-  async getDepartments(): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
+  async getAllCompanies(): Promise<{ id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]> {
     const { data, error } = await this.supabase
-      .from('departments')
-      .select('id, site_id, name, sites(name)')
+      .from('companies')
+      .select('id, name, subscription_level, subscription_active, subscription_activated_at')
       .order('name');
     if (error) throw error;
-    return (data ?? []).map((r: Record<string, unknown>) => ({
+    return (data ?? []) as { id: number; name: string; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[];
+  }
+
+  async updateCompanySubscription(companyId: number, subscriptionActive: boolean, subscriptionLevel?: number) {
+    const payload: Record<string, unknown> = {
+      subscription_active: subscriptionActive,
+      updated_at: new Date().toISOString(),
+    };
+    if (subscriptionActive) {
+      payload.subscription_activated_at = new Date().toISOString();
+    }
+    if (subscriptionLevel !== undefined) {
+      payload.subscription_level = subscriptionLevel;
+    }
+    const { error } = await this.supabase
+      .from('companies')
+      .update(payload)
+      .eq('id', companyId);
+    if (error) throw error;
+  }
+
+  async getSites(adminProfile?: Profile): Promise<{ id: number; name: string; company_id?: number | null }[]> {
+    let q = this.supabase.from('sites').select('id, name, company_id').order('name');
+    if (adminProfile?.role === 'company_admin') {
+      const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
+      if (companyId) q = q.eq('company_id', companyId);
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []) as { id: number; name: string; company_id?: number | null }[];
+  }
+
+  async getDepartments(adminProfile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
+    let q = this.supabase
+      .from('departments')
+      .select('id, site_id, name, sites(name, company_id)')
+      .order('name');
+    const { data, error } = await q;
+    if (error) throw error;
+    let rows = (data ?? []).map((r: Record<string, unknown>) => ({
       id: r.id,
       site_id: r.site_id,
       name: r.name,
       site_name: (r.sites as { name: string })?.name,
-    })) as { id: number; site_id: number; name: string; site_name?: string }[];
+      _company_id: (r.sites as { company_id?: number | null })?.company_id,
+    }));
+    if (adminProfile?.role === 'company_admin') {
+      const companyId = adminProfile.company_id ?? (await this.supabase.from('companies').select('id').limit(1).single()).data?.id;
+      if (companyId) rows = rows.filter((r: { _company_id?: number | null }) => r._company_id === companyId);
+    }
+    return rows.map((r: Record<string, unknown>) => {
+      const { _company_id, ...rest } = r;
+      return rest;
+    }) as { id: number; site_id: number; name: string; site_name?: string }[];
   }
 
-  async getProfileAccess(profileId: number): Promise<{ site_id: number; department_id: number | null; site_name?: string; department_name?: string }[]> {
+  async getProfileAccess(profileId: number): Promise<{ site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[]> {
     const { data, error } = await this.supabase
       .from('profile_access')
-      .select('site_id, department_id, sites(name), departments(name)')
+      .select('site_id, department_id, equipment_id, sites(name), departments(name)')
       .eq('profile_id', profileId);
     if (error) throw error;
     return (data ?? []).map((r: Record<string, unknown>) => ({
       site_id: r.site_id,
       department_id: r.department_id,
+      equipment_id: r.equipment_id ?? null,
       site_name: (r.sites as { name: string })?.name,
       department_name: (r.departments as { name: string })?.name,
-    })) as { site_id: number; department_id: number | null; site_name?: string; department_name?: string }[];
+    })) as { site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[];
   }
 
-  async setProfileAccess(profileId: number, access: { site_id: number; department_id?: number | null }[]) {
+  async setProfileAccess(profileId: number, access: { site_id: number; department_id?: number | null; equipment_id?: number | null }[]) {
     await this.supabase.from('profile_access').delete().eq('profile_id', profileId);
     if (access.length === 0) return;
     const rows = access.map((a) => ({
       profile_id: profileId,
       site_id: a.site_id,
       department_id: a.department_id ?? null,
+      equipment_id: a.equipment_id ?? null,
     }));
     const { error } = await this.supabase.from('profile_access').insert(rows);
     if (error) throw error;
   }
 
-  async createSite(name: string) {
-    const { error } = await this.supabase.from('sites').insert({ name });
+  async createSite(name: string, companyId?: number | null) {
+    const { error } = await this.supabase.from('sites').insert({ name, company_id: companyId ?? null });
     if (error) throw error;
   }
 
@@ -245,7 +348,7 @@ export class Database {
 
   async getDepartmentsForProfile(profile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
     const all = await this.getDepartments();
-    if (!profile || profile.role === 'admin') return all;
+    if (!profile || profile.role === 'super_admin' || profile.role === 'company_admin') return all;
     const allowed = await this.getAllowedDepartmentIds(profile);
     if (allowed === null) return all;
     if (allowed.length === 0) return [];
@@ -310,23 +413,33 @@ export class Database {
       .order('make')
       .order('model');
 
+    let allowedEquip: number[] = [];
     if (profile) {
-      const allowed = await this.getAllowedDepartmentIds(profile);
-      if (allowed !== null) {
-        if (allowed.length === 0) return [];
-        q = q.in('department_id', allowed);
+      const [allowedDepts, equipIds] = await Promise.all([
+        this.getAllowedDepartmentIds(profile),
+        this.getAllowedEquipmentIds(profile),
+      ]);
+      allowedEquip = equipIds;
+      if (allowedDepts !== null) {
+        if (allowedDepts.length === 0) return [];
+        q = q.in('department_id', allowedDepts);
       }
     }
 
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map((r: Record<string, unknown>) => ({
+    let rows = (data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
       equipment_type_name: (r.equipment_types as { name: string })?.name,
       department_name: (r.departments as { name: string })?.name,
       equipment_types: undefined,
       departments: undefined,
     })) as Equipment[];
+    if (allowedEquip.length > 0) {
+      const equipSet = new Set(allowedEquip);
+      rows = rows.filter((e) => equipSet.has(e.id));
+    }
+    return rows;
   }
 
   async getEquipmentById(id: number, profile?: Profile): Promise<Equipment | undefined> {
@@ -342,11 +455,15 @@ export class Database {
     if (error || !data) return undefined;
 
     if (profile) {
-      const allowed = await this.getAllowedDepartmentIds(profile);
-      if (allowed !== null) {
+      const [allowedDepts, allowedEquip] = await Promise.all([
+        this.getAllowedDepartmentIds(profile),
+        this.getAllowedEquipmentIds(profile),
+      ]);
+      if (allowedDepts !== null) {
         const deptId = (data as { department_id?: number }).department_id;
-        if (deptId == null || !allowed.includes(deptId)) return undefined;
+        if (deptId == null || !allowedDepts.includes(deptId)) return undefined;
       }
+      if (allowedEquip.length > 0 && !allowedEquip.includes(id)) return undefined;
     }
 
     return {
@@ -429,7 +546,59 @@ export class Database {
       .select('id')
       .single();
     if (error) throw error;
-    return inserted?.id ?? 0;
+    const eqId = inserted?.id ?? 0;
+    if (eqId && data.department_id) {
+      await this.autoAddEquipmentToDepartmentAccess(eqId, data.department_id);
+    }
+    return eqId;
+  }
+
+  /** Auto-add new equipment to profile_access for users with equipment-level access in this department */
+  private async autoAddEquipmentToDepartmentAccess(equipmentId: number, departmentId: number) {
+    const { data: dept } = await this.supabase.from('departments').select('site_id').eq('id', departmentId).single();
+    if (!dept?.site_id) return;
+    const { data: accessRows } = await this.supabase
+      .from('profile_access')
+      .select('profile_id, site_id, department_id')
+      .eq('site_id', dept.site_id)
+      .eq('department_id', departmentId)
+      .not('equipment_id', 'is', null);
+    const profileIds = [...new Set((accessRows ?? []).map((r: { profile_id: number }) => r.profile_id))];
+    for (const profileId of profileIds) {
+      await this.supabase.from('profile_access').insert({
+        profile_id: profileId,
+        site_id: dept.site_id,
+        department_id: departmentId,
+        equipment_id: equipmentId,
+      });
+    }
+  }
+
+  async bulkUpdateEquipment(ids: number[], data: Partial<{
+    equipment_type_id: number;
+    department_id: number | null;
+    make: string;
+    model: string;
+    serial_number: string;
+    equipment_number: string | null;
+    last_calibration_date: string | null;
+    next_calibration_due: string | null;
+    notes: string | null;
+  }>, profile?: Profile) {
+    if (ids.length === 0) return;
+    const payload: Record<string, unknown> = {};
+    if (data.equipment_type_id !== undefined) payload.equipment_type_id = data.equipment_type_id;
+    if (data.department_id !== undefined) payload.department_id = data.department_id;
+    if (data.make !== undefined) payload.make = data.make;
+    if (data.model !== undefined) payload.model = data.model;
+    if (data.serial_number !== undefined) payload.serial_number = data.serial_number;
+    if (data.equipment_number !== undefined) payload.equipment_number = data.equipment_number;
+    if (data.last_calibration_date !== undefined) payload.last_calibration_date = data.last_calibration_date;
+    if (data.next_calibration_due !== undefined) payload.next_calibration_due = data.next_calibration_due;
+    if (data.notes !== undefined) payload.notes = data.notes;
+    if (Object.keys(payload).length === 0) return;
+    const { error } = await this.supabase.from('equipment').update(payload).in('id', ids);
+    if (error) throw error;
   }
 
   async updateEquipment(id: number, data: Partial<{
@@ -704,11 +873,15 @@ export class Database {
       };
     });
     if (profile) {
-      const allowed = await this.getAllowedDepartmentIds(profile);
-      if (allowed !== null && allowed.length > 0) {
-        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed.includes(r._department_id));
-      } else if (allowed !== null) {
-        rows = [];
+      if (profile.role === 'user') {
+        rows = rows.filter((r: { requester_email?: string }) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
+      } else {
+        const allowed = await this.getAllowedDepartmentIds(profile);
+        if (allowed !== null && allowed.length > 0) {
+          rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed.includes(r._department_id));
+        } else if (allowed !== null) {
+          rows = [];
+        }
       }
     }
     return rows.map((r: Record<string, unknown>) => {

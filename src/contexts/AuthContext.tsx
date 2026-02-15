@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { api } from '../api';
 
-export type Role = 'user' | 'equipment_manager' | 'admin';
+export type Role = 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
 
 export interface Profile {
   id: number;

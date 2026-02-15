@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { format } from 'date-fns';
 import { Check, X, Clock } from 'lucide-react';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EquipmentRequest {
   id: number;
@@ -26,6 +26,8 @@ interface EquipmentRequest {
 }
 
 export default function RequestQueue() {
+  const { profile } = useAuth();
+  const isUser = profile?.role === 'user';
   const [requests, setRequests] = useState<EquipmentRequest[]>([]);
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
   const [reviewedBy, setReviewedBy] = useState(() => localStorage.getItem('equipment-reviewer-name') || '');
@@ -81,11 +83,12 @@ export default function RequestQueue() {
   return (
     <div>
       <div className="page-header">
-        <h2>Request Queue</h2>
-        <p>Review and approve or reject equipment requests</p>
+        <h2>{isUser ? 'My Requests' : 'Request Queue'}</h2>
+        <p>{isUser ? 'View your equipment request history' : 'Review and approve or reject equipment requests'}</p>
       </div>
 
       <div className="card">
+        {!isUser && (
         <div style={{ marginBottom: '1rem' }}>
           <div className="form-group" style={{ maxWidth: '300px' }}>
             <label>Your Name (as reviewer)</label>
@@ -96,6 +99,7 @@ export default function RequestQueue() {
             />
           </div>
         </div>
+        )}
 
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <button
@@ -108,7 +112,7 @@ export default function RequestQueue() {
             className={`btn ${tab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setTab('all')}
           >
-            All Requests
+            {isUser ? 'All My Requests' : 'All Requests'}
           </button>
         </div>
 
@@ -122,7 +126,7 @@ export default function RequestQueue() {
                 <th>Equipment to Test</th>
                 <th>Dates</th>
                 <th>Status</th>
-                {tab === 'pending' && <th></th>}
+                {tab === 'pending' && !isUser && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -155,7 +159,7 @@ export default function RequestQueue() {
                       </div>
                     )}
                   </td>
-                  {tab === 'pending' && (
+                  {tab === 'pending' && !isUser && (
                     <td>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button
@@ -218,7 +222,7 @@ export default function RequestQueue() {
                   </span>
                 </span>
               </div>
-              {tab === 'pending' && r.status === 'pending' && (
+              {tab === 'pending' && !isUser && r.status === 'pending' && (
                 <div className="mobile-card-actions" style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
                     className="btn btn-primary"
@@ -249,7 +253,7 @@ export default function RequestQueue() {
         )}
       </div>
 
-      {tab === 'pending' && (
+      {tab === 'pending' && !isUser && (
         <div className="card">
           <h3 className="card-title">Rejection Comment (optional)</h3>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
