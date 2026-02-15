@@ -367,13 +367,13 @@ export default function Admin() {
       {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
 
       {isFullAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-          {/* Company Info */}
+        <div style={{ display: 'grid', gridTemplateColumns: (isSuperAdmin || profile?.role === 'company_admin') ? 'minmax(280px, 1fr) minmax(340px, 1fr)' : '1fr', gap: '1rem', marginBottom: '1.5rem', alignItems: 'start' }}>
+          {/* Company Info - Column 1 */}
           {(isSuperAdmin || profile?.role === 'company_admin') && (
-            <div className="card">
+            <div className="card company-info-compact">
               <h3 className="card-title"><Building2 size={20} /> Company Info</h3>
               {isSuperAdmin && companies.length > 0 && (
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: '0.5rem' }}>
                   <label>Company</label>
                   <select
                     value={selectedCompanyId ?? ''}
@@ -386,7 +386,7 @@ export default function Admin() {
                   </select>
                 </div>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <div className="form-group">
                   <label>Company Name</label>
                   <input
@@ -475,6 +475,8 @@ export default function Admin() {
             </div>
           )}
 
+          {/* Column 2: Create User + Users & Access stacked */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Create User */}
           <div className="card">
             <h3 className="card-title"><Users size={20} /> Create User</h3>
@@ -554,7 +556,7 @@ export default function Admin() {
           </div>
 
           {/* Users & Access */}
-          <div className="card" style={{ gridColumn: isSuperAdmin || profile?.role === 'company_admin' ? undefined : '1 / -1' }}>
+          <div className="card">
             <h3 className="card-title"><Users size={20} /> Users & Access</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               Set role and assign site/department access. Click row to expand access.
@@ -586,6 +588,7 @@ export default function Admin() {
               )}
               emptyMessage="No users"
             />
+          </div>
           </div>
         </div>
       )}
@@ -647,9 +650,9 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Sites & Departments - 2 column */}
+      {/* Sites & Departments - 2 column, Sites narrower so Departments has more room */}
       {isFullAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.45fr) minmax(360px, 1fr)', gap: '1rem' }}>
           <div className="card">
             <h3 className="card-title"><Building2 size={20} /> Sites</h3>
             <form onSubmit={handleAddSite} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
