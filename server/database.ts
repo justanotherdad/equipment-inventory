@@ -14,6 +14,7 @@ export interface Equipment {
   equipment_type_name?: string;
   department_id?: number | null;
   department_name?: string | null;
+  site_name?: string | null;
   make: string;
   model: string;
   serial_number: string;
@@ -522,7 +523,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name),
-        departments(name)
+        departments(name, sites(name))
       `)
       .order('make')
       .order('model');
@@ -542,13 +543,17 @@ export class Database {
 
     const { data, error } = await q;
     if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => ({
-      ...r,
-      equipment_type_name: (r.equipment_types as { name: string })?.name,
-      department_name: (r.departments as { name: string })?.name,
-      equipment_types: undefined,
-      departments: undefined,
-    })) as Equipment[];
+    let rows = (data ?? []).map((r: Record<string, unknown>) => {
+      const dept = r.departments as { name?: string; sites?: { name: string } } | null;
+      return {
+        ...r,
+        equipment_type_name: (r.equipment_types as { name: string })?.name,
+        department_name: dept?.name ?? null,
+        site_name: dept?.sites?.name ?? null,
+        equipment_types: undefined,
+        departments: undefined,
+      };
+    }) as Equipment[];
     if (allowedEquip.length > 0) {
       const equipSet = new Set(allowedEquip);
       rows = rows.filter((e) => equipSet.has(e.id));
@@ -562,7 +567,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name),
-        departments(name)
+        departments(name, sites(name))
       `)
       .eq('id', id)
       .single();
@@ -580,10 +585,12 @@ export class Database {
       if (allowedEquip.length > 0 && !allowedEquip.includes(id)) return undefined;
     }
 
+    const dept = data.departments as { name?: string; sites?: { name: string } } | null;
     return {
       ...data,
       equipment_type_name: (data.equipment_types as { name: string })?.name,
-      department_name: (data.departments as { name: string })?.name,
+      department_name: dept?.name ?? null,
+      site_name: dept?.sites?.name ?? null,
       equipment_types: undefined,
       departments: undefined,
     } as Equipment;
@@ -1079,12 +1086,14 @@ export class Database {
     requester_name: string;
     requester_email: string;
     requester_phone: string;
+    site_id?: number | null;
     building: string;
+    room_number?: string | null;
     equipment_number_to_test: string;
     date_from: string;
     date_to: string;
   }) {
-    const { error } = await this.supabase.from('equipment_requests').insert({
+    const payload: Record<string, unknown> = {
       equipment_id: data.equipment_id,
       requester_name: data.requester_name,
       requester_email: data.requester_email,
@@ -1093,7 +1102,10 @@ export class Database {
       equipment_number_to_test: data.equipment_number_to_test,
       date_from: data.date_from,
       date_to: data.date_to,
-    });
+    };
+    if (data.site_id != null) payload.site_id = data.site_id;
+    if (data.room_number != null) payload.room_number = data.room_number;
+    const { error } = await this.supabase.from('equipment_requests').insert(payload);
     if (error) throw error;
   }
 
@@ -1102,22 +1114,29 @@ export class Database {
     requester_name: string;
     requester_email: string;
     requester_phone: string;
+    site_id?: number | null;
     building: string;
+    room_number?: string | null;
     equipment_number_to_test: string;
     date_from: string;
     date_to: string;
   }) {
     if (!data.equipment_ids?.length) throw new Error('At least one equipment is required');
-    const rows = data.equipment_ids.map((equipment_id) => ({
-      equipment_id,
-      requester_name: data.requester_name,
-      requester_email: data.requester_email,
-      requester_phone: data.requester_phone,
-      building: data.building,
-      equipment_number_to_test: data.equipment_number_to_test,
-      date_from: data.date_from,
-      date_to: data.date_to,
-    }));
+    const rows = data.equipment_ids.map((equipment_id) => {
+      const row: Record<string, unknown> = {
+        equipment_id,
+        requester_name: data.requester_name,
+        requester_email: data.requester_email,
+        requester_phone: data.requester_phone,
+        building: data.building,
+        equipment_number_to_test: data.equipment_number_to_test,
+        date_from: data.date_from,
+        date_to: data.date_to,
+      };
+      if (data.site_id != null) row.site_id = data.site_id;
+      if (data.room_number != null) row.room_number = data.room_number;
+      return row;
+    });
     const { error } = await this.supabase.from('equipment_requests').insert(rows);
     if (error) throw error;
   }
@@ -1125,7 +1144,7 @@ export class Database {
   async approveEquipmentRequest(
     id: number,
     reviewedBy: string
-  ): Promise<{ equipment_id: number; requester_name: string; building: string; equipment_number_to_test: string; date_from: string; date_to: string }> {
+  ): Promise<{ equipment_id: number; requester_name: string; building: string; room_number?: string | null; equipment_number_to_test: string; date_from: string; date_to: string }> {
     const { data: req, error: fetchErr } = await this.supabase
       .from('equipment_requests')
       .select('*')
@@ -1146,6 +1165,7 @@ export class Database {
       equipment_id: req.equipment_id,
       requester_name: req.requester_name,
       building: req.building,
+      room_number: (req as { room_number?: string | null }).room_number ?? null,
       equipment_number_to_test: req.equipment_number_to_test,
       date_from: req.date_from,
       date_to: req.date_to,

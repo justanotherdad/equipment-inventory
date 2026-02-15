@@ -138,7 +138,9 @@ export const api = {
       requester_name: string;
       requester_email: string;
       requester_phone: string;
+      site_id?: number | null;
       building: string;
+      room_number?: string | null;
       equipment_number_to_test: string;
       date_from: string;
       date_to: string;

@@ -395,11 +395,15 @@ app.post('/api/equipment-requests/:id/approve', async (req, res) => {
     const { reviewed_by } = req.body;
     if (!reviewed_by?.trim()) return res.status(400).json({ error: 'reviewed_by is required' });
     const reqData = await db.approveEquipmentRequest(parseInt(req.params.id, 10), reviewed_by.trim());
+    const purposeParts = [`Building: ${reqData.building}`];
+    if (reqData.room_number) purposeParts.push(`Room: ${reqData.room_number}`);
+    purposeParts.push(`Equipment to test: #${reqData.equipment_number_to_test}`, `Dates: ${reqData.date_from} to ${reqData.date_to}`);
     const signOutId = await db.createSignOut({
       equipment_id: reqData.equipment_id,
       signed_out_by: reqData.requester_name,
-      purpose: `Building: ${reqData.building}, Equipment to test: #${reqData.equipment_number_to_test}, Dates: ${reqData.date_from} to ${reqData.date_to}`,
+      purpose: purposeParts.join(', '),
       building: reqData.building,
+      room_number: reqData.room_number ?? undefined,
       equipment_number_to_test: reqData.equipment_number_to_test,
       date_from: reqData.date_from,
       date_to: reqData.date_to,

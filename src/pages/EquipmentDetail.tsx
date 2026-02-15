@@ -8,6 +8,8 @@ import { api } from '../api';
 interface Equipment {
   id: number;
   equipment_type_name: string;
+  department_name?: string | null;
+  site_name?: string | null;
   make: string;
   model: string;
   serial_number: string;
@@ -134,6 +136,22 @@ export default function EquipmentDetail() {
       <div className="card">
         <h3 className="card-title">Details</h3>
         <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          {(equipment.site_name || equipment.department_name) && (
+            <>
+              {equipment.site_name && (
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Site</div>
+                  <div>{equipment.site_name}</div>
+                </div>
+              )}
+              {equipment.department_name && (
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Department</div>
+                  <div>{equipment.department_name}</div>
+                </div>
+              )}
+            </>
+          )}
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Make</div>
             <div>{equipment.make}</div>

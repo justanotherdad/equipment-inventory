@@ -18,7 +18,10 @@ export default function RequestEquipment() {
   const [email, setEmail] = useState(() => localStorage.getItem('equipment-requester-email') || '');
   const [phone, setPhone] = useState(() => localStorage.getItem('equipment-requester-phone') || '');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [sites, setSites] = useState<{ id: number; name: string }[]>([]);
+  const [siteId, setSiteId] = useState<string>('');
   const [building, setBuilding] = useState('');
+  const [roomNumber, setRoomNumber] = useState('');
   const [equipmentToTest, setEquipmentToTest] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -28,10 +31,12 @@ export default function RequestEquipment() {
 
   useEffect(() => {
     (async () => {
-      const [eq, signOuts] = await Promise.all([
+      const [eq, signOuts, sitesList] = await Promise.all([
         api.equipment.getAll(),
         api.signOuts.getActive(),
+        api.sites.getAll().catch(() => []),
       ]);
+      setSites(sitesList);
       setEquipment(eq);
       setActiveSignOuts(new Set(signOuts.map((s: { equipment_id: number }) => s.equipment_id)));
       const available = eq.filter((e: Equipment) => !signOuts.some((s: { equipment_id: number }) => s.equipment_id === e.id));
@@ -65,7 +70,9 @@ export default function RequestEquipment() {
         requester_name: name.trim(),
         requester_email: email.trim(),
         requester_phone: phone.trim(),
+        site_id: siteId ? parseInt(siteId, 10) : null,
         building: building.trim(),
+        room_number: roomNumber.trim() || null,
         equipment_number_to_test: equipmentToTest.trim(),
         date_from: dateFrom,
         date_to: dateTo,
@@ -75,7 +82,9 @@ export default function RequestEquipment() {
       localStorage.setItem('equipment-requester-email', email.trim());
       localStorage.setItem('equipment-requester-phone', phone.trim());
       setSelectedIds(new Set());
+      setSiteId('');
       setBuilding('');
+      setRoomNumber('');
       setEquipmentToTest('');
       setDateFrom('');
       setDateTo('');
@@ -123,21 +132,37 @@ export default function RequestEquipment() {
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Select one or more items. {selectedIds.size > 0 && `${selectedIds.size} selected`}
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 200, overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
-              {availableEquipment.map((e) => (
-                <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: 6, background: selectedIds.has(e.id) ? 'var(--bg-primary)' : 'transparent' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(e.id)}
-                    onChange={() => toggleEquipment(e.id)}
-                  />
-                  <span style={{ fontSize: '0.9rem' }}>
-                    {e.make} {e.model}
-                    {e.equipment_number ? ` (#${e.equipment_number})` : ` (S/N: ${e.serial_number})`}
-                    {e.equipment_type_name ? ` — ${e.equipment_type_name}` : ''}
-                  </span>
-                </label>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 200, overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 8, border: '1px solid var(--border)' }}>
+              {availableEquipment.map((e) => {
+                const label = [e.make, e.model].filter(Boolean).join(' ') || `Equipment #${e.id}`;
+                const suffix = e.equipment_number ? ` (#${e.equipment_number})` : e.serial_number ? ` (S/N: ${e.serial_number})` : '';
+                const typeSuffix = e.equipment_type_name ? ` — ${e.equipment_type_name}` : '';
+                return (
+                  <label
+                    key={e.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      cursor: 'pointer',
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: 6,
+                      background: selectedIds.has(e.id) ? 'var(--bg-primary)' : 'transparent',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(e.id)}
+                      onChange={() => toggleEquipment(e.id)}
+                    />
+                    <span style={{ fontSize: '0.9rem', flex: 1 }}>
+                      {label}{suffix}{typeSuffix}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
             {availableEquipment.length === 0 && equipment.length > 0 && (
               <p style={{ fontSize: '0.8rem', color: 'var(--warning)', marginTop: '0.5rem' }}>
@@ -146,9 +171,30 @@ export default function RequestEquipment() {
             )}
           </div>
 
+          {sites.length > 0 && (
+            <div className="form-group">
+              <label>Site</label>
+              <select
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+              >
+                <option value="">— Select site —</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="form-group">
             <label>Building *</label>
             <input value={building} onChange={(e) => setBuilding(e.target.value)} required placeholder="Building where equipment will be used" />
+          </div>
+
+          <div className="form-group">
+            <label>Room Number</label>
+            <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="Room or location" />
           </div>
 
           <div className="form-group">
