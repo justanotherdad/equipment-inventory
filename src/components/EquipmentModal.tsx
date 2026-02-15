@@ -18,8 +18,10 @@ interface Props {
 
 export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props) {
   const [types, setTypes] = useState<EquipmentType[]>([]);
+  const [departments, setDepartments] = useState<{ id: number; site_id: number; name: string; site_name?: string }[]>([]);
   const [form, setForm] = useState({
     equipment_type_id: 0,
+    department_id: null as number | null,
     make: '',
     model: '',
     serial_number: '',
@@ -34,6 +36,7 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
 
   useEffect(() => {
     api.equipmentTypes.getAll().then(setTypes);
+    api.departments.getAll().then(setDepartments);
   }, []);
 
   useEffect(() => {
@@ -48,6 +51,7 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
         if (e) {
           setForm({
             equipment_type_id: e.equipment_type_id,
+            department_id: (e as { department_id?: number | null }).department_id ?? null,
             make: e.make,
             model: e.model,
             serial_number: e.serial_number,
@@ -83,6 +87,7 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
     try {
       const payload = {
         equipment_type_id: form.equipment_type_id,
+        department_id: form.department_id,
         make: form.make.trim(),
         model: form.model.trim(),
         serial_number: form.serial_number.trim(),
@@ -119,6 +124,18 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Department</label>
+            <select
+              value={form.department_id ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value ? parseInt(e.target.value, 10) : null }))}
+            >
+              <option value="">— Select —</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} {d.site_name ? `(${d.site_name})` : ''}</option>
+              ))}
+            </select>
+          </div>
           <div className="form-group">
             <label>Equipment Type</label>
             <select

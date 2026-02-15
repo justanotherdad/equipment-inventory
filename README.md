@@ -15,7 +15,10 @@ A web application for tracking equipment inventory, calibrations, sign-outs, and
 - **Calibration Records**: Upload PDF scans of calibration certificates to each equipment item
 - **Usage History**: See which systems or equipment each item was used to map/test during sign-outs
 - **Mobile Friendly**: Responsive layout with collapsible sidebar on small screens
-- **Admin Panel** (inactive): Placeholder for future multi-site access control, user/equipment manager/admin roles
+- **User Login**: Supabase Auth (email/password). Sign up or sign in required.
+- **Admin Panel**: Manage users, roles (User, Equipment Manager, Admin), sites, and departments
+- **Access Control**: Users and equipment managers see only equipment in their assigned sites/departments
+- **Departments**: Equipment is assigned to departments within sites. Admins create sites and departments.
 
 ## Requirements
 
@@ -24,6 +27,14 @@ A web application for tracking equipment inventory, calibrations, sign-outs, and
 
 ## Development
 
+1. Copy `.env.example` to `.env` and add:
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (for client auth)
+   - `ADMIN_EMAIL` (optional – your email becomes admin on first login)
+
+2. Run the schema in Supabase SQL Editor: `schema.sql`, `schema-v2-requests.sql`, `schema-v3-auth-access.sql`
+
+3. Start the app:
 ```bash
 npm install
 npm run dev
@@ -77,7 +88,7 @@ You can add, edit, or remove equipment types in **Equipment Types** (Settings).
 - **TypeScript** – Type safety
 - **Vite** – Build tooling
 - **Express** – API server
-- **SQLite (better-sqlite3)** – Database
+- **Supabase** – PostgreSQL database + Auth + Storage
 - **React Router** – Navigation
 - **date-fns** – Date formatting
 - **Lucide React** – Icons

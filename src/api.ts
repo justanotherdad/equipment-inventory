@@ -2,13 +2,21 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+let authToken: string | null = null;
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> ?? {}),
+    ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+  };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      ...(options?.headers ?? {}),
-      ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-    },
+    headers,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -19,6 +27,26 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  auth: {
+    getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'admin' }>('/api/auth/me'),
+  },
+  admin: {
+    getProfiles: () => request<{ id: number; email: string; display_name: string | null; role: string }[]>('/api/admin/profiles'),
+    updateProfileRole: (id: number, role: 'user' | 'equipment_manager' | 'admin') =>
+      request(`/api/admin/profiles/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+    getProfileAccess: (id: number) =>
+      request<{ site_id: number; department_id: number | null; site_name?: string; department_name?: string }[]>(`/api/admin/profiles/${id}/access`),
+    setProfileAccess: (id: number, access: { site_id: number; department_id?: number | null }[]) =>
+      request(`/api/admin/profiles/${id}/access`, { method: 'PUT', body: JSON.stringify({ access }) }),
+    getSites: () => request<{ id: number; name: string }[]>('/api/admin/sites'),
+    createSite: (name: string) => request('/api/admin/sites', { method: 'POST', body: JSON.stringify({ name }) }),
+    getDepartments: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/admin/departments'),
+    createDepartment: (siteId: number, name: string) =>
+      request('/api/admin/departments', { method: 'POST', body: JSON.stringify({ site_id: siteId, name }) }),
+  },
+  departments: {
+    getAll: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/departments'),
+  },
   equipmentTypes: {
     getAll: () => request('/api/equipment-types'),
     create: (data: { name: string; requires_calibration: boolean; calibration_frequency_months?: number }) =>

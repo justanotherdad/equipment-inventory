@@ -22,7 +22,8 @@ This guide uses **Supabase** for database and file storage, so you can run on Re
 2. Click **New query**
 3. Copy the contents of `supabase/schema.sql` from this project and run it
 4. Run a second query with the contents of `supabase/schema-v2-requests.sql` (adds equipment requests)
-5. You should see "Success. No rows returned" for each
+5. Run a third query with the contents of `supabase/schema-v3-auth-access.sql` (adds auth, sites, departments, access control)
+6. You should see "Success. No rows returned" for each
 
 ### Step 3: Create the Storage Bucket
 
@@ -71,9 +72,18 @@ In the **Environment** section, add:
 
 | Key | Value |
 |-----|-------|
-| `SUPABASE_URL` | Your Supabase Project URL (from Step 4 above) |
+| `SUPABASE_URL` | Your Supabase Project URL |
 | `SUPABASE_SERVICE_KEY` | Your Supabase service_role key |
+| `SUPABASE_ANON_KEY` | Your Supabase anon key (for auth) |
 | `SUPABASE_STORAGE_BUCKET` | `calibration-records` (optional – this is the default) |
+| `ADMIN_EMAIL` | Your email – you become admin on first login (optional) |
+
+For the **client** (Vite), add these in Render's environment (they are passed at build time):
+
+| Key | Value |
+|-----|-------|
+| `VITE_SUPABASE_URL` | Same as SUPABASE_URL |
+| `VITE_SUPABASE_ANON_KEY` | Same as SUPABASE_ANON_KEY |
 
 ### Step 4: Deploy
 

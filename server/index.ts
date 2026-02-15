@@ -7,6 +7,7 @@ import multer from 'multer';
 import archiver from 'archiver';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database';
+import { authMiddleware } from './auth';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,18 @@ const upload = multer({
 
 app.use(cors());
 app.use(express.json());
+
+// Auth: get or create profile (requires valid JWT)
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    res.json(req.profile);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+// All API routes require auth
+app.use('/api', authMiddleware);
 
 // API routes
 app.get('/api/equipment-types', async (_req, res) => {
@@ -73,18 +86,18 @@ app.delete('/api/equipment-types/:id', async (req, res) => {
   }
 });
 
-app.get('/api/equipment', async (_req, res) => {
+app.get('/api/equipment', async (req, res) => {
   try {
-    const data = await db.getAllEquipment();
+    const data = await db.getAllEquipment(req.profile);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-app.get('/api/equipment/calibration-status', async (_req, res) => {
+app.get('/api/equipment/calibration-status', async (req, res) => {
   try {
-    const data = await db.getCalibrationStatus();
+    const data = await db.getCalibrationStatus(req.profile);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -102,7 +115,7 @@ app.get('/api/equipment/barcode/:barcode', async (req, res) => {
 
 app.get('/api/equipment/:id', async (req, res) => {
   try {
-    const eq = await db.getEquipmentById(parseInt(req.params.id, 10));
+    const eq = await db.getEquipmentById(parseInt(req.params.id, 10), req.profile);
     res.json(eq ?? null);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -141,18 +154,18 @@ app.delete('/api/equipment/:id', async (req, res) => {
   }
 });
 
-app.get('/api/sign-outs', async (_req, res) => {
+app.get('/api/sign-outs', async (req, res) => {
   try {
-    const data = await db.getAllSignOuts();
+    const data = await db.getAllSignOuts(req.profile);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 
-app.get('/api/sign-outs/active', async (_req, res) => {
+app.get('/api/sign-outs/active', async (req, res) => {
   try {
-    const data = await db.getActiveSignOuts();
+    const data = await db.getActiveSignOuts(req.profile);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -281,9 +294,9 @@ app.delete('/api/calibration-records/:id', async (req, res) => {
   }
 });
 
-app.get('/api/calibration-records', async (_req, res) => {
+app.get('/api/calibration-records', async (req, res) => {
   try {
-    const records = await db.getAllCalibrationRecords();
+    const records = await db.getAllCalibrationRecords(req.profile);
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -326,7 +339,7 @@ app.post('/api/calibration-records/download-batch', async (req, res) => {
 app.get('/api/equipment-requests', async (req, res) => {
   try {
     const status = req.query.status as 'pending' | 'approved' | 'rejected' | undefined;
-    const data = await db.getEquipmentRequests(status);
+    const data = await db.getEquipmentRequests(status, req.profile);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -373,6 +386,101 @@ app.post('/api/equipment-requests/:id/reject', async (req, res) => {
     if (!reviewed_by?.trim()) return res.status(400).json({ error: 'reviewed_by is required' });
     await db.rejectEquipmentRequest(parseInt(req.params.id, 10), reviewed_by.trim(), comment);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+// Admin-only routes
+function adminOnly(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.profile?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+app.get('/api/admin/profiles', adminOnly, async (_req, res) => {
+  try {
+    const data = await db.getAllProfiles();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.put('/api/admin/profiles/:id/role', adminOnly, async (req, res) => {
+  try {
+    const role = req.body.role as 'user' | 'equipment_manager' | 'admin';
+    if (!['user', 'equipment_manager', 'admin'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    await db.updateProfileRole(parseInt(req.params.id, 10), role);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/admin/profiles/:id/access', adminOnly, async (req, res) => {
+  try {
+    const data = await db.getProfileAccess(parseInt(req.params.id, 10));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.put('/api/admin/profiles/:id/access', adminOnly, async (req, res) => {
+  try {
+    const access = req.body.access as { site_id: number; department_id?: number | null }[];
+    if (!Array.isArray(access)) return res.status(400).json({ error: 'access must be an array' });
+    await db.setProfileAccess(parseInt(req.params.id, 10), access);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/admin/sites', adminOnly, async (_req, res) => {
+  try {
+    const data = await db.getSites();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/admin/sites', adminOnly, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    await db.createSite(name.trim());
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/departments', async (req, res) => {
+  try {
+    const data = await db.getDepartmentsForProfile(req.profile);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/admin/departments', adminOnly, async (_req, res) => {
+  try {
+    const data = await db.getDepartments();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/admin/departments', adminOnly, async (req, res) => {
+  try {
+    const { site_id, name } = req.body;
+    if (!site_id || !name?.trim()) return res.status(400).json({ error: 'site_id and name are required' });
+    await db.createDepartment(parseInt(String(site_id), 10), name.trim());
+    res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }

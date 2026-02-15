@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import './App.css';
-import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
 import EquipmentList from './pages/EquipmentList';
 import EquipmentDetail from './pages/EquipmentDetail';
@@ -12,6 +13,7 @@ import RequestEquipment from './pages/RequestEquipment';
 import RequestQueue from './pages/RequestQueue';
 import Admin from './pages/Admin';
 import CalibrationDownloads from './pages/CalibrationDownloads';
+import Login from './pages/Login';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -25,12 +27,28 @@ const navItems = [
   { to: '/admin', icon: Shield, label: 'Admin' },
 ];
 
-export default function App() {
+function ProtectedLayout() {
+  const { profile, loading, signOut } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
 
+  if (loading) {
+    return (
+      <div className="app-layout" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const filteredNavItems = profile.role === 'admin'
+    ? navItems
+    : navItems.filter((item) => item.to !== '/admin');
+
   return (
-    <BrowserRouter>
-      <div className="app-layout">
+    <div className="app-layout">
         <aside className="sidebar">
           <div className="sidebar-header">
             <Package size={28} />
@@ -45,7 +63,7 @@ export default function App() {
             </button>
           </div>
           <nav className={`sidebar-nav ${navOpen ? '' : 'collapsed'}`}>
-            {navItems.map(({ to, icon: Icon, label }) => (
+            {filteredNavItems.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -55,6 +73,15 @@ export default function App() {
                 <span>{label}</span>
               </NavLink>
             ))}
+            <button
+              type="button"
+              className="nav-item"
+              onClick={() => signOut()}
+              style={{ marginTop: 'auto', border: 'none', background: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+            >
+              <LogOut size={20} />
+              <span>Sign out</span>
+            </button>
           </nav>
         </aside>
         <main className="main-content">
@@ -72,6 +99,18 @@ export default function App() {
           </Routes>
         </main>
       </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<ProtectedLayout />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
