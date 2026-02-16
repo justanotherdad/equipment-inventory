@@ -15,6 +15,7 @@ export interface Profile {
   phone: string | null;
   role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
   company_id?: number | null;
+  onboarding_complete?: boolean;
 }
 
 declare global {

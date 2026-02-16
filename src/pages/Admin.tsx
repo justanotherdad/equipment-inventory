@@ -102,6 +102,10 @@ export default function Admin() {
   const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
   const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
   const [createCompanyWithAdmin, setCreateCompanyWithAdmin] = useState(true);
+  const [deleteCompanyModal, setDeleteCompanyModal] = useState<Company | null>(null);
+  const [closeCompanyModal, setCloseCompanyModal] = useState(false);
+  const [closeCompanyConfirm, setCloseCompanyConfirm] = useState('');
+  const [closingCompany, setClosingCompany] = useState(false);
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const isFullAdmin = profile?.role === 'super_admin' || profile?.role === 'company_admin';
@@ -361,6 +365,38 @@ export default function Admin() {
     }
   };
 
+  const handleDeleteCompany = async (company: Company) => {
+    if (!confirm(`Permanently delete "${company.name}" and all its data (sites, departments, equipment, users)? This cannot be undone.`)) return;
+    try {
+      await api.admin.deleteCompany(company.id);
+      setDeleteCompanyModal(null);
+      await load(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete company');
+    }
+  };
+
+  const handleCloseCompany = async () => {
+    const name = (companyForm.name ?? '').trim();
+    if (!name || closeCompanyConfirm.trim().toUpperCase() !== name.toUpperCase()) {
+      setError('Type the company name exactly to confirm');
+      return;
+    }
+    if (!profile?.company_id) return;
+    setClosingCompany(true);
+    setError('');
+    try {
+      await api.admin.closeCompany(profile.company_id, closeCompanyConfirm.trim());
+      setCloseCompanyModal(false);
+      setCloseCompanyConfirm('');
+      window.location.href = '/login';
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to close company');
+    } finally {
+      setClosingCompany(false);
+    }
+  };
+
   const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptSiteId || !newDeptName.trim()) return;
@@ -550,6 +586,16 @@ export default function Admin() {
                   </div>
                 </div>
                 <button type="button" className="btn btn-primary" onClick={handleSaveCompany}>Save Company</button>
+                {profile?.role === 'company_admin' && (
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    style={{ marginTop: '1rem' }}
+                    onClick={() => { setCloseCompanyModal(true); setCloseCompanyConfirm(''); setError(''); }}
+                  >
+                    Close Company & Delete All Data
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -624,14 +670,24 @@ export default function Admin() {
                 searchPlaceholder="Search subscriptions…"
                 searchKeys={['name', 'contact_name', 'contact_email']}
                 renderActions={(row) => (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                    onClick={() => { setEditSubscriptionModal(row); setEditSubscriptionForm(row); }}
-                  >
-                    <Pencil size={14} /> Edit
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                      onClick={() => { setEditSubscriptionModal(row); setEditSubscriptionForm(row); }}
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                      onClick={() => setDeleteCompanyModal(row)}
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  </div>
                 )}
                 emptyMessage="No companies"
               />
@@ -1035,6 +1091,51 @@ export default function Admin() {
                 <button type="button" className="btn btn-secondary" onClick={() => setAddCompanyModal(false)}>Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Company Modal (Super Admin) */}
+      {deleteCompanyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setDeleteCompanyModal(null)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 440, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ color: 'var(--danger)', marginTop: 0 }}>Delete Company</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Permanently delete "{deleteCompanyModal.name}" and all associated data (sites, departments, equipment, users, calibration records)? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+              <button type="button" className="btn btn-danger" onClick={() => handleDeleteCompany(deleteCompanyModal)}>Delete</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setDeleteCompanyModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Company Modal (Company Admin) */}
+      {closeCompanyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setCloseCompanyModal(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 440, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ color: 'var(--danger)', marginTop: 0 }}>Close Company & Delete All Data</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              This will permanently delete your company, all sites, departments, equipment, users, and calibration records. Your account will be removed. This cannot be undone.
+            </p>
+            <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+              Type <strong>{(companyForm.name ?? '').trim() || 'your company name'}</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={closeCompanyConfirm}
+              onChange={(e) => setCloseCompanyConfirm(e.target.value)}
+              placeholder="Company name"
+              style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit', marginBottom: '1rem' }}
+            />
+            {error && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</p>}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" className="btn btn-danger" onClick={handleCloseCompany} disabled={closingCompany}>
+                {closingCompany ? 'Closing…' : 'Close Company & Delete'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setCloseCompanyModal(false); setCloseCompanyConfirm(''); setError(''); }}>Cancel</button>
+            </div>
           </div>
         </div>
       )}

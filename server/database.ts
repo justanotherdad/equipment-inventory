@@ -84,6 +84,7 @@ export interface Profile {
   phone: string | null;
   role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin';
   company_id?: number | null;
+  onboarding_complete?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -220,6 +221,7 @@ export class Database {
       email: email.toLowerCase(),
       role,
       company_id: assignedCompanyId ?? null,
+      onboarding_complete: role === 'company_admin' ? false : undefined,
     };
     if (displayName !== undefined && displayName !== null) payload.display_name = displayName;
     const { data: profile, error } = await this.supabase
@@ -263,6 +265,14 @@ export class Database {
     const { data, error } = await this.supabase.from('profiles').select('*').eq('id', profileId).single();
     if (error || !data) return undefined;
     return data as Profile;
+  }
+
+  async setOnboardingComplete(profileId: number): Promise<void> {
+    const { error } = await this.supabase
+      .from('profiles')
+      .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
+      .eq('id', profileId);
+    if (error) throw error;
   }
 
   async deleteProfile(profileId: number) {
@@ -319,6 +329,53 @@ export class Database {
     }).select('id').single();
     if (error) throw error;
     return (data as { id: number })?.id ?? null;
+  }
+
+  async deleteCompany(companyId: number): Promise<{ storagePaths: string[]; authUserIds: string[] }> {
+    const { data: companySites } = await this.supabase.from('sites').select('id').eq('company_id', companyId);
+    const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+    const { data: companyDepts } = await this.supabase.from('departments').select('id').in('site_id', siteIds);
+    const deptIds = (companyDepts ?? []).map((d: { id: number }) => d.id);
+    const { data: companyEquipment } = await this.supabase.from('equipment').select('id').in('department_id', deptIds.length ? deptIds : [-1]);
+    const equipmentIds = (companyEquipment ?? []).map((e: { id: number }) => e.id);
+
+    const storagePaths: string[] = [];
+    for (const eqId of equipmentIds) {
+      const { data: calRecords } = await this.supabase.from('calibration_records').select('storage_path').eq('equipment_id', eqId);
+      for (const r of calRecords ?? []) storagePaths.push((r as { storage_path: string }).storage_path);
+    }
+
+    const checkoutIdsToDelete = new Set<number>();
+    for (const eqId of equipmentIds) {
+      const signOuts = (await this.supabase.from('sign_outs').select('id, checkout_id').eq('equipment_id', eqId)).data ?? [];
+      const signOutIds = signOuts.map((s: { id: number }) => s.id);
+      for (const s of signOuts) {
+        const cid = (s as { checkout_id?: number }).checkout_id;
+        if (cid) checkoutIdsToDelete.add(cid);
+      }
+      if (signOutIds.length) await this.supabase.from('usage').delete().in('sign_out_id', signOutIds);
+      await this.supabase.from('sign_outs').delete().eq('equipment_id', eqId);
+    }
+    for (const cid of checkoutIdsToDelete) {
+      await this.supabase.from('checkouts').delete().eq('id', cid);
+    }
+    await this.supabase.from('equipment_requests').delete().in('equipment_id', equipmentIds.length ? equipmentIds : [-1]);
+    for (const eqId of equipmentIds) {
+      await this.supabase.from('calibration_records').delete().eq('equipment_id', eqId);
+    }
+    await this.supabase.from('equipment').delete().in('id', equipmentIds.length ? equipmentIds : [-1]);
+
+    const { data: companyProfiles } = await this.supabase.from('profiles').select('id, auth_user_id').eq('company_id', companyId);
+    const authUserIds: string[] = (companyProfiles ?? []).map((p) => (p as { auth_user_id: string }).auth_user_id).filter(Boolean);
+    for (const p of companyProfiles ?? []) {
+      await this.supabase.from('profile_access').delete().eq('profile_id', (p as { id: number }).id);
+    }
+    await this.supabase.from('profiles').delete().eq('company_id', companyId);
+    await this.supabase.from('departments').delete().in('site_id', siteIds.length ? siteIds : [-1]);
+    await this.supabase.from('sites').delete().eq('company_id', companyId);
+    const { error } = await this.supabase.from('companies').delete().eq('id', companyId);
+    if (error) throw error;
+    return { storagePaths, authUserIds };
   }
 
   async updateCompanySubscription(companyId: number, subscriptionActive: boolean, subscriptionLevel?: number) {
@@ -443,6 +500,22 @@ export class Database {
     if (error) throw error;
   }
 
+  /** Returns true if the department belongs to the given company (via site). */
+  async isDepartmentInCompany(departmentId: number, companyId: number): Promise<boolean> {
+    const { data: dept, error } = await this.supabase
+      .from('departments')
+      .select('site_id')
+      .eq('id', departmentId)
+      .single();
+    if (error || !dept?.site_id) return false;
+    const { data: site } = await this.supabase
+      .from('sites')
+      .select('company_id')
+      .eq('id', dept.site_id)
+      .single();
+    return (site as { company_id?: number | null })?.company_id === companyId;
+  }
+
   async getDepartmentsForProfile(profile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
     const all = await this.getDepartments();
     if (!profile || profile.role === 'super_admin' || profile.role === 'company_admin') return all;
@@ -535,7 +608,22 @@ export class Database {
         this.getAllowedEquipmentIds(profile),
       ]);
       allowedEquip = equipIds;
-      if (allowedDepts !== null) {
+
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const { data: companySites } = await this.supabase
+          .from('sites')
+          .select('id')
+          .eq('company_id', profile.company_id);
+        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+        if (siteIds.length === 0) return [];
+        const { data: companyDepts } = await this.supabase
+          .from('departments')
+          .select('id')
+          .in('site_id', siteIds);
+        const deptIds = (companyDepts ?? []).map((d: { id: number }) => d.id);
+        if (deptIds.length === 0) return [];
+        q = q.in('department_id', deptIds);
+      } else if (allowedDepts !== null) {
         if (allowedDepts.length === 0) return [];
         q = q.in('department_id', allowedDepts);
       }
@@ -567,22 +655,28 @@ export class Database {
       .select(`
         *,
         equipment_types(name),
-        departments(name, sites(name))
+        departments(name, sites(name, company_id))
       `)
       .eq('id', id)
       .single();
     if (error || !data) return undefined;
 
     if (profile) {
-      const [allowedDepts, allowedEquip] = await Promise.all([
-        this.getAllowedDepartmentIds(profile),
-        this.getAllowedEquipmentIds(profile),
-      ]);
-      if (allowedDepts !== null) {
-        const deptId = (data as { department_id?: number }).department_id;
-        if (deptId == null || !allowedDepts.includes(deptId)) return undefined;
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const dept = data.departments as { sites?: { company_id?: number | null } } | null;
+        const companyId = dept?.sites?.company_id;
+        if (companyId !== profile.company_id) return undefined;
+      } else {
+        const [allowedDepts, allowedEquip] = await Promise.all([
+          this.getAllowedDepartmentIds(profile),
+          this.getAllowedEquipmentIds(profile),
+        ]);
+        if (allowedDepts !== null) {
+          const deptId = (data as { department_id?: number }).department_id;
+          if (deptId == null || !allowedDepts.includes(deptId)) return undefined;
+        }
+        if (allowedEquip.length > 0 && !allowedEquip.includes(id)) return undefined;
       }
-      if (allowedEquip.length > 0 && !allowedEquip.includes(id)) return undefined;
     }
 
     const dept = data.departments as { name?: string; sites?: { name: string } } | null;
@@ -596,23 +690,33 @@ export class Database {
     } as Equipment;
   }
 
-  async getEquipmentByBarcode(barcode: string): Promise<Equipment | undefined> {
+  async getEquipmentByBarcode(barcode: string, profile?: Profile): Promise<Equipment | undefined> {
     const trimmed = barcode.trim();
     if (!trimmed) return undefined;
-    const { data, error } = await this.supabase
+    let q = this.supabase
       .from('equipment')
       .select(`
         *,
-        equipment_types(name)
+        equipment_types(name),
+        departments(name, sites(name, company_id))
       `)
       .or(`serial_number.eq.${trimmed},equipment_number.eq.${trimmed}`)
-      .limit(1)
-      .single();
+      .limit(1);
+    const { data, error } = await q.single();
     if (error || !data) return undefined;
+    if (profile?.role === 'company_admin' && profile.company_id) {
+      const dept = data.departments as { sites?: { company_id?: number | null } } | null;
+      const companyId = dept?.sites?.company_id;
+      if (companyId !== profile.company_id) return undefined;
+    }
+    const dept = data.departments as { name?: string; sites?: { name: string } } | null;
     return {
       ...data,
       equipment_type_name: (data.equipment_types as { name: string })?.name,
+      department_name: dept?.name ?? null,
+      site_name: dept?.sites?.name ?? null,
       equipment_types: undefined,
+      departments: undefined,
     } as Equipment;
   }
 
@@ -813,9 +917,26 @@ export class Database {
       };
     });
     if (profile) {
-      const allowed = await this.getAllowedDepartmentIds(profile);
+      let allowed: number[] | null;
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const { data: companySites } = await this.supabase
+          .from('sites')
+          .select('id')
+          .eq('company_id', profile.company_id);
+        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+        if (siteIds.length === 0) allowed = [];
+        else {
+          const { data: companyDepts } = await this.supabase
+            .from('departments')
+            .select('id')
+            .in('site_id', siteIds);
+          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
+        }
+      } else {
+        allowed = await this.getAllowedDepartmentIds(profile);
+      }
       if (allowed !== null && allowed.length > 0) {
-        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed.includes(r._department_id));
+        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
       } else if (allowed !== null) {
         rows = [];
       }
@@ -1009,9 +1130,26 @@ export class Database {
       };
     });
     if (profile) {
-      const allowed = await this.getAllowedDepartmentIds(profile);
+      let allowed: number[] | null;
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const { data: companySites } = await this.supabase
+          .from('sites')
+          .select('id')
+          .eq('company_id', profile.company_id);
+        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+        if (siteIds.length === 0) allowed = [];
+        else {
+          const { data: companyDepts } = await this.supabase
+            .from('departments')
+            .select('id')
+            .in('site_id', siteIds);
+          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
+        }
+      } else {
+        allowed = await this.getAllowedDepartmentIds(profile);
+      }
       if (allowed !== null && allowed.length > 0) {
-        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed.includes(r._department_id));
+        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
       } else if (allowed !== null) {
         rows = [];
       }
@@ -1067,9 +1205,26 @@ export class Database {
       if (profile.role === 'user') {
         rows = rows.filter((r: { requester_email?: string }) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
       } else {
-        const allowed = await this.getAllowedDepartmentIds(profile);
+        let allowed: number[] | null;
+        if (profile.role === 'company_admin' && profile.company_id) {
+          const { data: companySites } = await this.supabase
+            .from('sites')
+            .select('id')
+            .eq('company_id', profile.company_id);
+          const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+          if (siteIds.length === 0) allowed = [];
+          else {
+            const { data: companyDepts } = await this.supabase
+              .from('departments')
+              .select('id')
+              .in('site_id', siteIds);
+            allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
+          }
+        } else {
+          allowed = await this.getAllowedDepartmentIds(profile);
+        }
         if (allowed !== null && allowed.length > 0) {
-          rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed.includes(r._department_id));
+          rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
         } else if (allowed !== null) {
           rows = [];
         }

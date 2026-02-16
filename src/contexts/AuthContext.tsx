@@ -13,6 +13,7 @@ export interface Profile {
   phone: string | null;
   role: Role;
   company_id?: number | null;
+  onboarding_complete?: boolean;
 }
 
 export interface AuthState {

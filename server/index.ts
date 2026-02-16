@@ -106,7 +106,7 @@ app.get('/api/equipment/calibration-status', async (req, res) => {
 
 app.get('/api/equipment/barcode/:barcode', async (req, res) => {
   try {
-    const eq = await db.getEquipmentByBarcode(req.params.barcode);
+    const eq = await db.getEquipmentByBarcode(req.params.barcode, req.profile);
     res.json(eq ?? null);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -124,6 +124,15 @@ app.get('/api/equipment/:id', async (req, res) => {
 
 app.post('/api/equipment', async (req, res) => {
   try {
+    if (req.profile?.role === 'company_admin' && req.profile.company_id) {
+      const deptId = req.body.department_id;
+      if (deptId != null) {
+        const ok = await db.isDepartmentInCompany(parseInt(String(deptId), 10), req.profile.company_id);
+        if (!ok) return res.status(403).json({ error: 'Department must belong to your company' });
+      } else {
+        return res.status(400).json({ error: 'Department is required' });
+      }
+    }
     const id = await db.createEquipment(req.body);
     res.status(201).json({ id });
   } catch (err) {
@@ -133,7 +142,12 @@ app.post('/api/equipment', async (req, res) => {
 
 app.put('/api/equipment/:id', async (req, res) => {
   try {
-    await db.updateEquipment(parseInt(req.params.id, 10), req.body);
+    const id = parseInt(req.params.id, 10);
+    if (req.profile?.role === 'company_admin') {
+      const existing = await db.getEquipmentById(id, req.profile);
+      if (!existing) return res.status(403).json({ error: 'Access denied' });
+    }
+    await db.updateEquipment(id, req.body);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -144,7 +158,14 @@ app.put('/api/equipment/bulk', async (req, res) => {
   try {
     const { ids, ...data } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
-    await db.bulkUpdateEquipment(ids.map((x: unknown) => parseInt(String(x), 10)), data);
+    const idList = ids.map((x: unknown) => parseInt(String(x), 10));
+    if (req.profile?.role === 'company_admin') {
+      for (const id of idList) {
+        const existing = await db.getEquipmentById(id, req.profile);
+        if (!existing) return res.status(403).json({ error: 'Access denied to one or more equipment items' });
+      }
+    }
+    await db.bulkUpdateEquipment(idList, data);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -154,6 +175,10 @@ app.put('/api/equipment/bulk', async (req, res) => {
 app.delete('/api/equipment/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
+    if (req.profile?.role === 'company_admin') {
+      const existing = await db.getEquipmentById(id, req.profile);
+      if (!existing) return res.status(403).json({ error: 'Access denied' });
+    }
     const records = await db.getCalibrationRecords(id);
     for (const r of records) {
       await supabase.storage.from(storageBucket).remove([r.storage_path]);
@@ -267,7 +292,12 @@ app.delete('/api/usage/:id', async (req, res) => {
 
 app.get('/api/calibration-records/equipment/:equipmentId', async (req, res) => {
   try {
-    const records = await db.getCalibrationRecords(parseInt(req.params.equipmentId, 10));
+    const equipmentId = parseInt(req.params.equipmentId, 10);
+    if (req.profile?.role === 'company_admin') {
+      const eq = await db.getEquipmentById(equipmentId, req.profile);
+      if (!eq) return res.status(403).json({ error: 'Access denied' });
+    }
+    const records = await db.getCalibrationRecords(equipmentId);
     res.json(records.map((r) => ({ ...r, download_url: `/api/calibration-records/${r.id}/download` })));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -278,6 +308,10 @@ app.post('/api/calibration-records/equipment/:equipmentId', upload.single('pdf')
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const equipmentId = parseInt(req.params.equipmentId, 10);
+    if (req.profile?.role === 'company_admin') {
+      const eq = await db.getEquipmentById(equipmentId, req.profile);
+      if (!eq) return res.status(403).json({ error: 'Access denied' });
+    }
     const ext = path.extname(req.file.originalname) || '.pdf';
     const storagePath = `${equipmentId}/${Date.now()}${ext}`;
 
@@ -300,7 +334,10 @@ app.get('/api/calibration-records/:id/download', async (req, res) => {
   try {
     const rec = await db.getCalibrationRecordById(parseInt(req.params.id, 10));
     if (!rec) return res.status(404).send('File not found');
-
+    if (req.profile?.role === 'company_admin') {
+      const eq = await db.getEquipmentById(rec.equipment_id, req.profile);
+      if (!eq) return res.status(403).send('Access denied');
+    }
     const { data, error } = await supabase.storage
       .from(storageBucket)
       .createSignedUrl(rec.storage_path, 60); // 60 second expiry
@@ -314,7 +351,13 @@ app.get('/api/calibration-records/:id/download', async (req, res) => {
 
 app.delete('/api/calibration-records/:id', async (req, res) => {
   try {
-    const rec = await db.deleteCalibrationRecord(parseInt(req.params.id, 10));
+    const recId = parseInt(req.params.id, 10);
+    const existing = await db.getCalibrationRecordById(recId);
+    if (existing && req.profile?.role === 'company_admin') {
+      const eq = await db.getEquipmentById(existing.equipment_id, req.profile);
+      if (!eq) return res.status(403).json({ error: 'Access denied' });
+    }
+    const rec = await db.deleteCalibrationRecord(recId);
     if (rec?.storage_path) {
       await supabase.storage.from(storageBucket).remove([rec.storage_path]);
     }
@@ -339,7 +382,15 @@ app.post('/api/calibration-records/download-batch', async (req, res) => {
     return res.status(400).json({ error: 'ids array required with at least one id' });
   }
   const records = await Promise.all(ids.map((id) => db.getCalibrationRecordById(id)));
-  const valid = records.filter((r): r is NonNullable<typeof r> => r != null);
+  let valid = records.filter((r): r is NonNullable<typeof r> => r != null);
+  if (req.profile?.role === 'company_admin') {
+    const accessChecked: typeof valid = [];
+    for (const rec of valid) {
+      const eq = await db.getEquipmentById(rec.equipment_id, req.profile);
+      if (eq) accessChecked.push(rec);
+    }
+    valid = accessChecked;
+  }
   if (valid.length === 0) return res.status(404).json({ error: 'No valid records found' });
 
   res.setHeader('Content-Type', 'application/zip');
@@ -440,6 +491,12 @@ function adminOnly(req: express.Request, res: express.Response, next: express.Ne
 // Super admin only
 function superAdminOnly(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (req.profile?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin access required' });
+  next();
+}
+
+// Company admin only (for onboarding)
+function companyAdminOnly(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.profile?.role !== 'company_admin') return res.status(403).json({ error: 'Company admin access required' });
   next();
 }
 
@@ -623,6 +680,30 @@ app.delete('/api/admin/departments/:id', adminOnly, async (req, res) => {
   }
 });
 
+app.get('/api/admin/onboarding-status', companyAdminOnly, async (req, res) => {
+  try {
+    const profile = req.profile;
+    let needsOnboarding = profile?.onboarding_complete !== true;
+    if (profile?.company_id) {
+      const sites = await db.getSites(profile);
+      if (sites.length === 0) needsOnboarding = true;
+    }
+    res.json({ needsOnboarding });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/admin/onboarding-complete', companyAdminOnly, async (req, res) => {
+  try {
+    if (!req.profile?.id) return res.status(400).json({ error: 'Profile not found' });
+    await db.setOnboardingComplete(req.profile.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.get('/api/admin/companies', superAdminOnly, async (_req, res) => {
   try {
     const data = await db.getAllCompanies();
@@ -699,6 +780,43 @@ app.put('/api/admin/companies/:id/subscription', superAdminOnly, async (req, res
     const companyId = parseInt(req.params.id, 10);
     if (typeof subscription_active !== 'boolean') return res.status(400).json({ error: 'subscription_active (boolean) required' });
     await db.updateCompanySubscription(companyId, subscription_active, subscription_level);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.delete('/api/admin/companies/:id', superAdminOnly, async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.id, 10);
+    const { storagePaths, authUserIds } = await db.deleteCompany(companyId);
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'calibration-records';
+    if (storagePaths.length) await supabase.storage.from(bucket).remove(storagePaths);
+    for (const uid of authUserIds) {
+      try { await supabase.auth.admin.deleteUser(uid); } catch { /* ignore */ }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/admin/companies/:id/close', companyAdminOnly, async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.id, 10);
+    if (req.profile?.company_id !== companyId) return res.status(403).json({ error: 'Access denied' });
+    const { confirm } = req.body;
+    const company = await db.getCompanyById(companyId);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    const expected = (company.name as string)?.trim().toUpperCase();
+    const provided = (confirm ?? '').trim().toUpperCase();
+    if (expected && provided !== expected) return res.status(400).json({ error: 'Type the company name exactly to confirm' });
+    const { storagePaths, authUserIds } = await db.deleteCompany(companyId);
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'calibration-records';
+    if (storagePaths.length) await supabase.storage.from(bucket).remove(storagePaths);
+    for (const uid of authUserIds) {
+      try { await supabase.auth.admin.deleteUser(uid); } catch { /* ignore */ }
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

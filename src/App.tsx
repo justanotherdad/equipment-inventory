@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import './App.css';
 import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { api } from './api';
+import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
 import Dashboard from './pages/Dashboard';
@@ -30,8 +32,19 @@ const navItems = [
 ];
 
 function ProtectedLayout() {
-  const { profile, loading, signOut } = useAuth();
+  const { profile, loading, signOut, refreshProfile } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<{ needsOnboarding: boolean } | null>(null);
+
+  useEffect(() => {
+    if (profile?.role === 'company_admin') {
+      api.admin.getOnboardingStatus()
+        .then(setOnboardingStatus)
+        .catch(() => setOnboardingStatus({ needsOnboarding: true }));
+    } else {
+      setOnboardingStatus(null);
+    }
+  }, [profile?.role]);
 
   if (loading) {
     return (
@@ -43,6 +56,22 @@ function ProtectedLayout() {
 
   if (!profile) {
     return <Navigate to="/login" replace />;
+  }
+
+  const showOnboarding = profile.role === 'company_admin' && onboardingStatus?.needsOnboarding;
+  if (showOnboarding) {
+    return (
+      <div className="app-layout" style={{ alignItems: 'stretch', justifyContent: 'flex-start' }}>
+        <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+          <CompanyAdminOnboarding
+            onComplete={async () => {
+              await refreshProfile();
+              setOnboardingStatus({ needsOnboarding: false });
+            }}
+          />
+        </main>
+      </div>
+    );
   }
 
   const filteredNavItems = (profile.role === 'super_admin' || profile.role === 'company_admin')
