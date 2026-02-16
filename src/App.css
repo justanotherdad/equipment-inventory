@@ -433,6 +433,15 @@ html, body {
   flex-shrink: 0;
 }
 
+.onboarding-access-section {
+  display: block;
+  overflow: hidden;
+}
+
+.onboarding-access-section > div {
+  min-width: 0;
+}
+
 .form-group {
   margin-bottom: 1rem;
 }

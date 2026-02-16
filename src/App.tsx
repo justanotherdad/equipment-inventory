@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import './App.css';
-import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { api } from './api';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
 import Dashboard from './pages/Dashboard';
@@ -18,6 +19,7 @@ import RequestQueue from './pages/RequestQueue';
 import Admin from './pages/Admin';
 import CalibrationDownloads from './pages/CalibrationDownloads';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -35,6 +37,7 @@ function ProtectedLayout() {
   const { profile, loading, signOut, refreshProfile } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<{ needsOnboarding: boolean } | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     if (profile?.role === 'company_admin') {
@@ -109,17 +112,27 @@ function ProtectedLayout() {
             <button
               type="button"
               className="nav-item"
+              onClick={() => setShowChangePassword(true)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+            >
+              <Key size={20} />
+              <span>Change password</span>
+            </button>
+            <button
+              type="button"
+              className="nav-item"
               onClick={() => signOut()}
-              style={{ marginTop: 'auto', border: 'none', background: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
             >
               <LogOut size={20} />
               <span>Sign out</span>
             </button>
-            <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+            <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', marginTop: 'auto' }}>
               {profile.email}
             </div>
           </nav>
         </aside>
+        {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
         <main className="main-content">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -145,6 +158,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="*" element={<ProtectedLayout />} />
         </Routes>

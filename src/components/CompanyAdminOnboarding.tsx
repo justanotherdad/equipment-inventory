@@ -406,7 +406,10 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
                 placeholder="e.g. Quality Control"
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '0.75rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setStep(1)} disabled={saving}>
+                Back
+              </button>
               <button type="button" className="btn btn-primary" onClick={handleStep2Next} disabled={saving}>
                 {saving ? 'Creating…' : 'Continue'}
               </button>
@@ -415,8 +418,8 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
         )}
 
         {step === 3 && (
-          <div className="onboarding-form">
-            <form onSubmit={handleStep3AddUser}>
+          <div className="onboarding-form" style={{ display: 'block', width: '100%' }}>
+            <form onSubmit={handleStep3AddUser} style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
               <div className="form-group" style={formGroupStyle}>
                 <label>Email</label>
                 <input
@@ -437,26 +440,33 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
                 />
               </div>
               {sites.length > 0 && (
-                <div className="form-group" style={{ ...formGroupStyle, marginTop: '1rem' }}>
+                <div className="form-group onboarding-access-section" style={{ ...formGroupStyle, marginTop: '1rem', width: '100%', minWidth: 0 }}>
                   <label>Access</label>
-                  <AccessCheckboxes
-                    sites={sites}
-                    departments={departments}
-                    equipment={equipment}
-                    access={newUserAccess}
-                    onSave={setNewUserAccess}
-                  />
+                  <div style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}>
+                    <AccessCheckboxes
+                      sites={sites}
+                      departments={departments}
+                      equipment={equipment}
+                      access={newUserAccess}
+                      onSave={setNewUserAccess}
+                    />
+                  </div>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                <button type="submit" className="btn btn-primary" disabled={saving || !newUserEmail.trim() || !newUserPassword.trim()}>
-                  {saving ? 'Adding…' : 'Add User'}
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={handleStep3Finish} disabled={saving}>
-                  Done
-                </button>
-                <button type="button" className="btn btn-outline" onClick={handleStep3Skip} disabled={saving}>
-                  Skip for now
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving || !newUserEmail.trim() || !newUserPassword.trim()}>
+                    {saving ? 'Adding…' : 'Add User'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={handleStep3Finish} disabled={saving}>
+                    Done
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={handleStep3Skip} disabled={saving}>
+                    Skip for now
+                  </button>
+                </div>
+                <button type="button" className="btn btn-secondary" onClick={() => setStep(2)} disabled={saving}>
+                  Back
                 </button>
               </div>
             </form>
