@@ -221,7 +221,7 @@ export default function EquipmentDetail() {
                     type="button"
                     onClick={() => handleOpenPdf(r)}
                     className="link"
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)' }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
                   >
                     {r.file_name}
                   </button>

@@ -161,7 +161,11 @@ export default function CalibrationStatus() {
               {sorted.map((item) => (
                 <tr key={item.id}>
                   <td>{statusBadge(item)}</td>
-                  <td>{item.equipment_type_name}</td>
+                  <td>
+                    <Link to={`/equipment/${item.id}`} className="link">
+                      {item.equipment_type_name}
+                    </Link>
+                  </td>
                   <td>{item.make} {item.model}</td>
                   <td>{item.serial_number}</td>
                   <td>{item.last_calibration_date ? format(new Date(item.last_calibration_date), 'MMM d, yyyy') : '—'}</td>
@@ -183,6 +187,12 @@ export default function CalibrationStatus() {
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Status</span>
                 <span className="mobile-card-value">{statusBadge(item)}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Type</span>
+                <span className="mobile-card-value">
+                  <Link to={`/equipment/${item.id}`} className="link">{item.equipment_type_name}</Link>
+                </span>
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Equipment</span>

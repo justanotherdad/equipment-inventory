@@ -106,7 +106,16 @@ export default function EquipmentTypes() {
             <tbody>
               {sorted.map((t) => (
                 <tr key={t.id}>
-                  <td>{t.name}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => { setEditingId(t.id); setShowModal(true); }}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: 'inherit' }}
+                    >
+                      {t.name}
+                    </button>
+                  </td>
                   <td>{t.requires_calibration ? 'Yes' : 'No'}</td>
                   <td>{t.calibration_frequency_months ? `Every ${t.calibration_frequency_months} months` : '—'}</td>
                   <td>
@@ -128,7 +137,16 @@ export default function EquipmentTypes() {
             <div key={t.id} className="mobile-card">
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Name</span>
-                <span className="mobile-card-value">{t.name}</span>
+                <span className="mobile-card-value">
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => { setEditingId(t.id); setShowModal(true); }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: 'inherit' }}
+                  >
+                    {t.name}
+                  </button>
+                </span>
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Calibration</span>

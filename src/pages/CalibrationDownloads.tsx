@@ -139,7 +139,7 @@ export default function CalibrationDownloads() {
                           type="button"
                           onClick={() => handleOpenOne(r.id)}
                           className="link"
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)' }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
                         >
                           {r.file_name}
                         </button>
@@ -184,7 +184,7 @@ export default function CalibrationDownloads() {
                           type="button"
                           onClick={() => handleOpenOne(r.id)}
                           className="link mobile-card-value"
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '0.8rem', wordBreak: 'break-all' }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem', wordBreak: 'break-all' }}
                         >
                           {r.file_name}
                         </button>

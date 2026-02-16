@@ -181,7 +181,11 @@ export default function EquipmentList() {
                       <input type="checkbox" checked={selectedIds.has(e.id)} onChange={() => toggleSelect(e.id)} />
                     </td>
                   )}
-                  <td>{e.equipment_type_name}</td>
+                  <td>
+                    <Link to={`/equipment/${e.id}`} className="link">
+                      {e.equipment_type_name}
+                    </Link>
+                  </td>
                   <td>{e.make}</td>
                   <td>{e.model}</td>
                   <td>{e.equipment_number ? `#${e.equipment_number}` : e.serial_number}</td>
@@ -212,7 +216,9 @@ export default function EquipmentList() {
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Type</span>
-                <span className="mobile-card-value">{e.equipment_type_name}</span>
+                <span className="mobile-card-value">
+                  <Link to={`/equipment/${e.id}`} className="link">{e.equipment_type_name}</Link>
+                </span>
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Serial / #</span>
