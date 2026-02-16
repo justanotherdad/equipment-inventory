@@ -492,12 +492,12 @@ export class Database {
 
   async createSite(name: string, companyId?: number | null) {
     const { error } = await this.supabase.from('sites').insert({ name, company_id: companyId ?? null });
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to create site');
   }
 
   async createDepartment(siteId: number, name: string) {
     const { error } = await this.supabase.from('departments').insert({ site_id: siteId, name });
-    if (error) throw error;
+    if (error) throw new Error(error.message || 'Failed to create department');
   }
 
   /** Returns true if the department belongs to the given company (via site). */
