@@ -80,8 +80,13 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
       setLoading(false);
       return;
     }
-    api.admin.getCompany(companyId)
-      .then((c) => {
+    Promise.all([
+      api.admin.getCompany(companyId),
+      api.admin.getSites(),
+      api.admin.getDepartments(),
+      api.equipment.getAll(),
+    ])
+      .then(([c, sitesData, depts, eq]) => {
         setCompanyForm({
           name: c.name ?? '',
           contact_name: c.contact_name ?? '',
@@ -93,6 +98,16 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
           address_state: c.address_state ?? '',
           address_zip: c.address_zip ?? '',
         });
+        setSites(sitesData);
+        setDepartments(depts);
+        setEquipment((eq as Equipment[]) ?? []);
+        if (sitesData.length > 0 && depts.length > 0) {
+          const firstSite = sitesData[0];
+          const firstDept = depts.find((d) => d.site_id === firstSite.id);
+          if (firstDept) {
+            setNewUserAccess([{ site_id: firstSite.id, department_id: firstDept.id }]);
+          }
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -162,7 +177,14 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
       }
       setStep(3);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create site and department');
+      const msg = e instanceof Error ? e.message : 'Failed to create site and department';
+      if (msg.includes('sites_company_name_unique') || msg.includes('duplicate key')) {
+        setError('A site with this name already exists for your company. Please choose a different name.');
+      } else if (msg.includes('departments_site_name_unique')) {
+        setError('A department with this name already exists at this site. Please choose a different name.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -405,6 +427,22 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
 
         {step === 2 && (
           <div className="onboarding-form">
+            {sites.length > 0 ? (
+              <>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                  You already have {sites.length} site{sites.length !== 1 ? 's' : ''}. Add another below or continue with existing.
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                  {sites.map((s) => (
+                    <span key={s.id} style={{ padding: '0.25rem 0.5rem', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: '0.9rem' }}>
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Create your first site and department.</p>
+            )}
             <div className="form-group" style={formGroupStyle}>
               <label>Site Name *</label>
               <input
@@ -425,13 +463,20 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
                 placeholder="e.g. Quality Control"
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setStep(1)} disabled={saving}>
                 Back
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleStep2Next} disabled={saving}>
-                {saving ? 'Creating…' : 'Continue'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {sites.length > 0 && (
+                  <button type="button" className="btn btn-outline" onClick={() => setStep(3)} disabled={saving}>
+                    Continue with existing
+                  </button>
+                )}
+                <button type="button" className="btn btn-primary" onClick={handleStep2Next} disabled={saving || !siteName.trim() || !departmentName.trim()}>
+                  {saving ? 'Creating…' : sites.length > 0 ? 'Add another' : 'Continue'}
+                </button>
+              </div>
             </div>
           </div>
         )}
