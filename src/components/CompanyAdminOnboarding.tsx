@@ -113,6 +113,24 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
       .finally(() => setLoading(false));
   }, [companyId]);
 
+  // Reload sites/departments when entering step 2 (in case initial load failed or data changed)
+  useEffect(() => {
+    if (step === 2 && companyId) {
+      Promise.all([api.admin.getSites(), api.admin.getDepartments(), api.equipment.getAll()])
+        .then(([sitesData, depts, eq]) => {
+          setSites(sitesData);
+          setDepartments(depts);
+          setEquipment((eq as Equipment[]) ?? []);
+          if (sitesData.length > 0 && depts.length > 0 && newUserAccess.length === 0) {
+            const firstSite = sitesData[0];
+            const firstDept = depts.find((d) => d.site_id === firstSite.id);
+            if (firstDept) setNewUserAccess([{ site_id: firstSite.id, department_id: firstDept.id }]);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [step, companyId]);
+
   const allCompanyFieldsValid = (): boolean => {
     const f = companyForm;
     return !!(
@@ -161,30 +179,49 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
     }
     setError('');
     setSaving(true);
+    const sName = siteName.trim();
+    const dName = departmentName.trim();
     try {
-      await api.admin.createSite(siteName.trim());
-      const sitesData = await api.admin.getSites();
-      const newSite = sitesData.find((s) => s.name === siteName.trim());
+      let newSite: { id: number; name: string } | undefined;
+      try {
+        await api.admin.createSite(sName);
+        const sitesData = await api.admin.getSites();
+        newSite = sitesData.find((s) => s.name === sName);
+      } catch (siteErr) {
+        const msg = siteErr instanceof Error ? siteErr.message : '';
+        if (msg.includes('sites_company_name_unique') || msg.includes('duplicate key')) {
+          const sitesData = await api.admin.getSites();
+          newSite = sitesData.find((s) => s.name === sName);
+          if (!newSite) throw new Error('Site exists but could not be found. Please refresh and try "Continue with existing".');
+        } else {
+          throw siteErr;
+        }
+      }
       if (!newSite) throw new Error('Site was created but could not be found');
-      await api.admin.createDepartment(newSite.id, departmentName.trim());
+
+      let newDept: { id: number; site_id: number; name: string } | undefined;
+      try {
+        await api.admin.createDepartment(newSite.id, dName);
+      } catch (deptErr) {
+        const msg = deptErr instanceof Error ? deptErr.message : '';
+        if (msg.includes('departments_site_name_unique') || msg.includes('duplicate key')) {
+          const depts = await api.admin.getDepartments();
+          newDept = depts.find((d) => d.site_id === newSite!.id && d.name === dName);
+        } else {
+          throw deptErr;
+        }
+      }
       const [depts, eq] = await Promise.all([api.admin.getDepartments(), api.equipment.getAll()]);
       setDepartments(depts);
       setEquipment((eq as Equipment[]) ?? []);
-      setSites(sitesData);
-      const newDept = depts.find((d) => d.site_id === newSite.id && d.name === departmentName.trim());
-      if (newDept) {
-        setNewUserAccess([{ site_id: newSite.id, department_id: newDept.id }]);
+      setSites(await api.admin.getSites());
+      const resolvedDept = newDept ?? depts.find((d) => d.site_id === newSite!.id && d.name === dName);
+      if (resolvedDept) {
+        setNewUserAccess([{ site_id: newSite.id, department_id: resolvedDept.id }]);
       }
       setStep(3);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create site and department';
-      if (msg.includes('sites_company_name_unique') || msg.includes('duplicate key')) {
-        setError('A site with this name already exists for your company. Please choose a different name.');
-      } else if (msg.includes('departments_site_name_unique')) {
-        setError('A department with this name already exists at this site. Please choose a different name.');
-      } else {
-        setError(msg);
-      }
+      setError(e instanceof Error ? e.message : 'Failed to create site and department');
     } finally {
       setSaving(false);
     }
