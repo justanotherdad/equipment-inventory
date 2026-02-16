@@ -212,28 +212,35 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
     return d && state.siteIds.has(d.site_id);
   };
 
+  const checkboxCol = { flex: '0 0 1.25rem', width: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-start' };
+  const rowStyle = { display: 'flex', alignItems: 'center', gap: '0.5rem' };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>
-          <input
-            type="checkbox"
-            checked={allSitesChecked}
-            ref={(el) => { if (el) el.indeterminate = sites.length > 0 && !allSitesChecked && sites.some((s) => state.siteIds.has(s.id)); }}
-            onChange={(e) => toggleAllSites(e.target.checked)}
-            disabled={disabled}
-          />
+        <label style={{ ...rowStyle, marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>
+          <span style={checkboxCol}>
+            <input
+              type="checkbox"
+              checked={allSitesChecked}
+              ref={(el) => { if (el) el.indeterminate = sites.length > 0 && !allSitesChecked && sites.some((s) => state.siteIds.has(s.id)); }}
+              onChange={(e) => toggleAllSites(e.target.checked)}
+              disabled={disabled}
+            />
+          </span>
           Sites
         </label>
         <div style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
           {sites.map((s) => (
-            <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: disabled ? 'default' : 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={state.siteIds.has(s.id)}
-                onChange={(e) => toggleSite(s.id, e.target.checked)}
-                disabled={disabled}
-              />
+            <label key={s.id} style={{ ...rowStyle, cursor: disabled ? 'default' : 'pointer' }}>
+              <span style={checkboxCol}>
+                <input
+                  type="checkbox"
+                  checked={state.siteIds.has(s.id)}
+                  onChange={(e) => toggleSite(s.id, e.target.checked)}
+                  disabled={disabled}
+                />
+              </span>
               {s.name}
             </label>
           ))}
@@ -242,24 +249,28 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
 
       {visibleDepts.length > 0 && (
         <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>
-            <input
-              type="checkbox"
-              checked={visibleDepts.every((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id))}
-              onChange={(e) => toggleAllDepartments(e.target.checked)}
-              disabled={disabled || (visibleDepts.length > 0 && visibleDepts.every((d) => isDeptInherited(d.id)))}
-            />
+          <label style={{ ...rowStyle, marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>
+            <span style={checkboxCol}>
+              <input
+                type="checkbox"
+                checked={visibleDepts.every((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id))}
+                onChange={(e) => toggleAllDepartments(e.target.checked)}
+                disabled={disabled || (visibleDepts.length > 0 && visibleDepts.every((d) => isDeptInherited(d.id)))}
+              />
+            </span>
             Departments
           </label>
           <div style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {visibleDepts.map((d) => (
-              <label key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: disabled || isDeptInherited(d.id) ? 'default' : 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={state.siteIds.has(d.site_id) || state.departmentIds.has(d.id)}
-                  onChange={(e) => toggleDepartment(d.id, e.target.checked)}
-                  disabled={disabled || isDeptInherited(d.id)}
-                />
+              <label key={d.id} style={{ ...rowStyle, cursor: disabled || isDeptInherited(d.id) ? 'default' : 'pointer' }}>
+                <span style={checkboxCol}>
+                  <input
+                    type="checkbox"
+                    checked={state.siteIds.has(d.site_id) || state.departmentIds.has(d.id)}
+                    onChange={(e) => toggleDepartment(d.id, e.target.checked)}
+                    disabled={disabled || isDeptInherited(d.id)}
+                  />
+                </span>
                 {d.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>({sites.find((s) => s.id === d.site_id)?.name})</span>
               </label>
             ))}
@@ -269,24 +280,28 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
 
       {visibleEquip.length > 0 && (
         <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600 }}>
-            <input
-              type="checkbox"
-              checked={visibleEquip.every((e) => hasEquipAccess(e))}
-              onChange={(e) => toggleAllEquipment(e.target.checked)}
-              disabled={disabled || (visibleEquip.length > 0 && visibleEquip.every((e) => isEquipInherited(e)))}
-            />
+          <label style={{ ...rowStyle, marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>
+            <span style={checkboxCol}>
+              <input
+                type="checkbox"
+                checked={visibleEquip.every((e) => hasEquipAccess(e))}
+                onChange={(e) => toggleAllEquipment(e.target.checked)}
+                disabled={disabled || (visibleEquip.length > 0 && visibleEquip.every((e) => isEquipInherited(e)))}
+              />
+            </span>
             Equipment
           </label>
           <div style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: 200, overflowY: 'auto' }}>
             {visibleEquip.map((eq) => (
-              <label key={eq.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: disabled || isEquipInherited(eq) ? 'default' : 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={hasEquipAccess(eq)}
-                  onChange={(e) => toggleEquipment(eq.id, e.target.checked)}
-                  disabled={disabled || isEquipInherited(eq)}
-                />
+              <label key={eq.id} style={{ ...rowStyle, cursor: disabled || isEquipInherited(eq) ? 'default' : 'pointer' }}>
+                <span style={checkboxCol}>
+                  <input
+                    type="checkbox"
+                    checked={hasEquipAccess(eq)}
+                    onChange={(e) => toggleEquipment(eq.id, e.target.checked)}
+                    disabled={disabled || isEquipInherited(eq)}
+                  />
+                </span>
                 <Package size={14} />
                 {eq.make} {eq.model} — {eq.serial_number}
               </label>
