@@ -261,16 +261,18 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
           ))}
         </div>
 
-        <h2 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>
-          {step === 1 && 'Company Details'}
-          {step === 2 && 'Site & Department'}
-          {step === 3 && 'Add Users'}
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-          {step === 1 && 'Enter your company information. All fields are required.'}
-          {step === 2 && 'Create your first site and department.'}
-          {step === 3 && 'Add team members who will use the system. You can skip this step and add users later.'}
-        </p>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h2 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>
+            {step === 1 && 'Company Details'}
+            {step === 2 && 'Site & Department'}
+            {step === 3 && 'Add Users'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0, textAlign: 'left', lineHeight: 1.5 }}>
+            {step === 1 && 'Enter your company information. All fields are required.'}
+            {step === 2 && 'Create your first site and department.'}
+            {step === 3 && 'Add team members who will use the system. You can skip this step and add users later.'}
+          </p>
+        </div>
 
         {error && (
           <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', borderRadius: 8, marginBottom: '1rem' }}>
