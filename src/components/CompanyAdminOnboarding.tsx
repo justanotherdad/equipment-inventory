@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
-import { Building2, MapPin, Users, ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, MapPin, Users, ChevronRight, Check, LogOut } from 'lucide-react';
 import PasswordInput from './PasswordInput';
 import AccessCheckboxes from './AccessCheckboxes';
 
@@ -56,7 +57,8 @@ const initialCompanyForm: CompanyForm = {
 };
 
 export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () => void }) {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [companyForm, setCompanyForm] = useState<CompanyForm>(initialCompanyForm);
   const [siteName, setSiteName] = useState('');
@@ -245,9 +247,26 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
     );
   }
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="onboarding-container">
       <div className="onboarding-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+          <div style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}
+            onClick={handleSignOut}
+          >
+            <LogOut size={16} />
+            Sign out
+          </button>
+        </div>
         <div className="onboarding-steps">
           {STEPS.map((s, i) => (
             <div
@@ -419,7 +438,7 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
 
         {step === 3 && (
           <div className="onboarding-form" style={{ display: 'block', width: '100%' }}>
-            <form onSubmit={handleStep3AddUser} style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+            <form onSubmit={handleStep3AddUser} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
               <div className="form-group" style={formGroupStyle}>
                 <label>Email</label>
                 <input
@@ -440,9 +459,9 @@ export default function CompanyAdminOnboarding({ onComplete }: { onComplete: () 
                 />
               </div>
               {sites.length > 0 && (
-                <div className="form-group onboarding-access-section" style={{ ...formGroupStyle, marginTop: '1rem', width: '100%', minWidth: 0 }}>
+                <div className="form-group onboarding-access-section" style={{ ...formGroupStyle, marginTop: '1rem', width: '100%' }}>
                   <label>Access</label>
-                  <div style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}>
+                  <div style={{ width: '100%' }}>
                     <AccessCheckboxes
                       sites={sites}
                       departments={departments}
