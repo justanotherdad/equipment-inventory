@@ -7,6 +7,13 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+/** Fetch a URL with auth header (for endpoints that require it, e.g. file downloads) */
+export async function fetchWithAuth(url: string, options?: RequestInit): Promise<Response> {
+  const headers: Record<string, string> = { ...(options?.headers as Record<string, string> ?? {}) };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  return fetch(url, { ...options, headers });
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> ?? {}),
@@ -122,6 +129,18 @@ export const api = {
     },
     delete: (id: number) => request(`/api/calibration-records/${id}`, { method: 'DELETE' }),
     getDownloadUrl: (id: number) => `${API_BASE}/api/calibration-records/${id}/download`,
+    /** Fetch PDF with auth and open in new tab (avoids "Authentication required" when using direct link) */
+    openInNewTab: async (id: number) => {
+      const res = await fetchWithAuth(`${API_BASE}/api/calibration-records/${id}/download`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || res.statusText);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
   },
   usage: {
     getBySignOut: (signOutId: number) => request(`/api/usage/sign-out/${signOutId}`),

@@ -92,7 +92,13 @@ export default function EquipmentDetail() {
     }
   };
 
-  const getPdfUrl = (r: CalRecord) => api.calibrationRecords.getDownloadUrl(r.id);
+  const handleOpenPdf = async (r: CalRecord) => {
+    try {
+      await api.calibrationRecords.openInNewTab(r.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to open file');
+    }
+  };
 
   const handleDeleteRecord = async (recordId: number) => {
     if (confirm('Delete this calibration record?')) {
@@ -211,21 +217,27 @@ export default function EquipmentDetail() {
               <li key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <FileText size={18} color="var(--text-muted)" />
-                  <span>{r.file_name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPdf(r)}
+                    className="link"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)' }}
+                  >
+                    {r.file_name}
+                  </button>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     {format(new Date(r.uploaded_at), 'MMM d, yyyy')}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <a
-                    href={getPdfUrl(r)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     className="btn btn-secondary"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', textDecoration: 'none' }}
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+                    onClick={() => handleOpenPdf(r)}
                   >
                     Open
-                  </a>
+                  </button>
                   <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleDeleteRecord(r.id)}>
                     <Trash2 size={14} />
                   </button>

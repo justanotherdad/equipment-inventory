@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Download, FileText } from 'lucide-react';
-import { api } from '../api';
+import { api, fetchWithAuth } from '../api';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -44,7 +44,7 @@ export default function CalibrationDownloads() {
     if (selected.size === 0) return;
     setDownloading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/calibration-records/download-batch`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/calibration-records/download-batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [...selected] }),
@@ -64,8 +64,12 @@ export default function CalibrationDownloads() {
     }
   };
 
-  const handleDownloadOne = (id: number) => {
-    window.open(api.calibrationRecords.getDownloadUrl(id), '_blank');
+  const handleOpenOne = async (id: number) => {
+    try {
+      await api.calibrationRecords.openInNewTab(id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to open file');
+    }
   };
 
   return (
@@ -131,14 +135,21 @@ export default function CalibrationDownloads() {
                       </td>
                       <td>
                         <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-                        {r.file_name}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOne(r.id)}
+                          className="link"
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)' }}
+                        >
+                          {r.file_name}
+                        </button>
                       </td>
                       <td>{format(new Date(r.uploaded_at), 'MMM d, yyyy')}</td>
                       <td>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
-                          onClick={() => handleDownloadOne(r.id)}
+                          onClick={() => handleOpenOne(r.id)}
                         >
                           Open
                         </button>
@@ -169,7 +180,14 @@ export default function CalibrationDownloads() {
                       </div>
                       <div className="mobile-card-row">
                         <span className="mobile-card-label">File</span>
-                        <span className="mobile-card-value" style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>{r.file_name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOne(r.id)}
+                          className="link mobile-card-value"
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '0.8rem', wordBreak: 'break-all' }}
+                        >
+                          {r.file_name}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -177,7 +195,7 @@ export default function CalibrationDownloads() {
                     <button
                       className="btn btn-secondary"
                       style={{ width: '100%' }}
-                      onClick={() => handleDownloadOne(r.id)}
+                      onClick={() => handleOpenOne(r.id)}
                     >
                       <FileText size={14} /> Open PDF
                     </button>
