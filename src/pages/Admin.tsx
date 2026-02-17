@@ -601,7 +601,9 @@ export default function Admin() {
                           ? new Date(companyForm.subscription_expires_at).toLocaleDateString()
                           : companyForm.subscription_activated_at
                             ? new Date(companyForm.subscription_activated_at).toLocaleDateString() + ' (activated)'
-                            : 'Not set'}
+                            : companyForm.subscription_active
+                              ? 'Active'
+                              : 'Not set'}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
