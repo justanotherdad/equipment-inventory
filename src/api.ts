@@ -108,9 +108,28 @@ export const api = {
     getActive: () => request('/api/sign-outs/active'),
     getByEquipment: (equipmentId: number) => request(`/api/sign-outs/equipment/${equipmentId}`),
     getActiveByEquipmentId: (equipmentId: number) => request(`/api/sign-outs/active/equipment/${equipmentId}`),
+    getInDateRange: (start: string, end: string) =>
+      request(`/api/sign-outs/date-range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
     create: (data: object) => request('/api/sign-outs', { method: 'POST', body: JSON.stringify(data) }),
     checkIn: (id: number, data: { signed_in_by: string }) =>
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  equipmentTested: {
+    getAll: () => request<Array<{ equipment_number_to_test: string; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }>>('/api/equipment-tested'),
+    getDetail: (equipmentNumber: string) =>
+      request<{
+        equipment_number_to_test: string;
+        tests: Array<{
+          sign_out_id: number;
+          signed_out_at: string;
+          signed_in_at: string | null;
+          site_name: string | null;
+          building: string | null;
+          room_number: string | null;
+          equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+          usage_equipment: string[];
+        }>;
+      }>(`/api/equipment-tested/${encodeURIComponent(equipmentNumber)}`),
   },
   sites: {
     getAll: () => request<{ id: number; name: string }[]>('/api/sites'),

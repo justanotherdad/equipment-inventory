@@ -1394,4 +1394,183 @@ export class Database {
     if (error) throw error;
     return data as { storage_path: string };
   }
+
+  /** Sign-outs overlapping a date range (for heat map availability) */
+  async getSignOutsInDateRange(profile: Profile | undefined, startDate: string, endDate: string): Promise<SignOut[]> {
+    const all = await this.getAllSignOuts(profile);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    return all.filter((s) => {
+      const outAt = new Date(s.signed_out_at);
+      const inAt = s.signed_in_at ? new Date(s.signed_in_at) : new Date();
+      return outAt <= end && inAt >= start;
+    });
+  }
+
+  /** Equipment tested: sign_outs with equipment_number_to_test, with site from equipment's department */
+  async getEquipmentTested(profile?: Profile): Promise<Array<{
+    equipment_number_to_test: string;
+    site_name: string | null;
+    building: string | null;
+    room_number: string | null;
+    last_tested_at: string;
+  }>> {
+    const { data, error } = await this.supabase
+      .from('sign_outs')
+      .select(`
+        equipment_number_to_test,
+        building,
+        room_number,
+        signed_out_at,
+        equipment(department_id, departments(sites(name)))
+      `)
+      .not('equipment_number_to_test', 'is', null)
+      .order('signed_out_at', { ascending: false });
+    if (error) throw error;
+    let rows = (data ?? []).map((r: Record<string, unknown>) => {
+      const eq = r.equipment as { department_id?: number; departments?: { sites?: { name: string } } } | null;
+      const siteName = eq?.departments?.sites?.name ?? null;
+      return {
+        equipment_number_to_test: r.equipment_number_to_test as string,
+        site_name: siteName,
+        building: (r.building as string) ?? null,
+        room_number: (r.room_number as string) ?? null,
+        signed_out_at: r.signed_out_at as string,
+        _department_id: eq?.department_id,
+      };
+    });
+    if (profile) {
+      let allowed: number[] | null;
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const { data: companySites } = await this.supabase
+          .from('sites')
+          .select('id')
+          .eq('company_id', profile.company_id);
+        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+        if (siteIds.length === 0) allowed = [];
+        else {
+          const { data: companyDepts } = await this.supabase
+            .from('departments')
+            .select('id')
+            .in('site_id', siteIds);
+          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
+        }
+      } else {
+        allowed = await this.getAllowedDepartmentIds(profile);
+      }
+      if (allowed !== null && allowed.length > 0) {
+        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
+      } else if (allowed !== null) {
+        rows = [];
+      }
+    }
+    const seen = new Set<string>();
+    const result: Array<{ equipment_number_to_test: string; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }> = [];
+    for (const r of rows) {
+      const key = `${r.equipment_number_to_test}|${r.site_name ?? ''}|${r.building ?? ''}|${r.room_number ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({
+        equipment_number_to_test: r.equipment_number_to_test,
+        site_name: r.site_name,
+        building: r.building,
+        room_number: r.room_number,
+        last_tested_at: r.signed_out_at,
+      });
+    }
+    return result;
+  }
+
+  /** Detail for one equipment number tested: all sign_outs, equipment used, dates, locations */
+  async getEquipmentTestedDetail(
+    profile: Profile | undefined,
+    equipmentNumber: string
+  ): Promise<{
+    equipment_number_to_test: string;
+    tests: Array<{
+      sign_out_id: number;
+      signed_out_at: string;
+      signed_in_at: string | null;
+      site_name: string | null;
+      building: string | null;
+      room_number: string | null;
+      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+      usage_equipment: string[];
+    }>;
+  }> {
+    const { data, error } = await this.supabase
+      .from('sign_outs')
+      .select(`
+        id,
+        signed_out_at,
+        signed_in_at,
+        building,
+        room_number,
+        equipment(id, make, model, serial_number, equipment_number, department_id, departments(sites(name)))
+      `)
+      .eq('equipment_number_to_test', equipmentNumber)
+      .order('signed_out_at', { ascending: false });
+    if (error) throw error;
+    let rows = data ?? [];
+    if (profile) {
+      let allowed: number[] | null;
+      if (profile.role === 'company_admin' && profile.company_id) {
+        const { data: companySites } = await this.supabase
+          .from('sites')
+          .select('id')
+          .eq('company_id', profile.company_id);
+        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+        if (siteIds.length === 0) allowed = [];
+        else {
+          const { data: companyDepts } = await this.supabase
+            .from('departments')
+            .select('id')
+            .in('site_id', siteIds);
+          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
+        }
+      } else {
+        allowed = await this.getAllowedDepartmentIds(profile);
+      }
+      if (allowed !== null && allowed.length > 0) {
+        rows = rows.filter((r: { equipment?: { department_id?: number | null } }) =>
+          r.equipment?.department_id != null && allowed!.includes(r.equipment.department_id)
+        );
+      } else if (allowed !== null) {
+        rows = [];
+      }
+    }
+    const tests: Array<{
+      sign_out_id: number;
+      signed_out_at: string;
+      signed_in_at: string | null;
+      site_name: string | null;
+      building: string | null;
+      room_number: string | null;
+      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+      usage_equipment: string[];
+    }> = [];
+    for (const r of rows) {
+      const eq = r.equipment as { id?: number; make: string; model: string; serial_number: string; equipment_number?: string | null; departments?: { sites?: { name: string } } };
+      const siteName = eq?.departments?.sites?.name ?? null;
+      const usageRows = await this.getUsageBySignOut(r.id);
+      tests.push({
+        sign_out_id: r.id,
+        signed_out_at: r.signed_out_at,
+        signed_in_at: r.signed_in_at,
+        site_name: siteName,
+        building: r.building ?? null,
+        room_number: r.room_number ?? null,
+        equipment_used: [{
+          id: eq?.id ?? 0,
+          make: eq?.make ?? '',
+          model: eq?.model ?? '',
+          serial_number: eq?.serial_number ?? '',
+          equipment_number: eq?.equipment_number ?? null,
+        }],
+        usage_equipment: usageRows.map((u) => u.system_equipment),
+      });
+    }
+    return { equipment_number_to_test: equipmentNumber, tests };
+  }
 }

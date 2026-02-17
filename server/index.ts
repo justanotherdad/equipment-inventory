@@ -236,6 +236,38 @@ app.get('/api/sign-outs/active/equipment/:equipmentId', async (req, res) => {
   }
 });
 
+app.get('/api/sign-outs/date-range', async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    if (typeof start !== 'string' || typeof end !== 'string') {
+      return res.status(400).json({ error: 'start and end query params required (YYYY-MM-DD)' });
+    }
+    const data = await db.getSignOutsInDateRange(req.profile, start, end);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/equipment-tested', async (req, res) => {
+  try {
+    const data = await db.getEquipmentTested(req.profile);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/equipment-tested/:equipmentNumber', async (req, res) => {
+  try {
+    const equipmentNumber = decodeURIComponent(req.params.equipmentNumber);
+    const data = await db.getEquipmentTestedDetail(req.profile, equipmentNumber);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.post('/api/sign-outs', async (req, res) => {
   try {
     const id = await db.createSignOut(req.body);

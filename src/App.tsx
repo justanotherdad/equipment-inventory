@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import './App.css';
-import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key, FlaskConical } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { api } from './api';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
@@ -18,6 +18,7 @@ import RequestEquipment from './pages/RequestEquipment';
 import RequestQueue from './pages/RequestQueue';
 import Admin from './pages/Admin';
 import CalibrationDownloads from './pages/CalibrationDownloads';
+import EquipmentTested from './pages/EquipmentTested';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 
@@ -28,6 +29,7 @@ const navItems = [
   { to: '/requests', icon: Inbox, label: 'Request Queue' },
   { to: '/sign-outs', icon: ClipboardList, label: 'Sign-outs' },
   { to: '/calibration', icon: CalendarCheck, label: 'Calibration Status' },
+  { to: '/equipment-tested', icon: FlaskConical, label: 'Equipment Tested' },
   { to: '/calibration-downloads', icon: Download, label: 'Download Cal Certs' },
   { to: '/settings', icon: Settings, label: 'Equipment Types' },
   { to: '/admin', icon: Shield, label: 'Admin' },
@@ -142,6 +144,7 @@ function ProtectedLayout() {
             <Route path="/requests" element={<RequestQueue />} />
             <Route path="/sign-outs" element={<SignOuts />} />
             <Route path="/calibration" element={<CalibrationStatus />} />
+            <Route path="/equipment-tested" element={<EquipmentTested />} />
             <Route path="/calibration-downloads" element={<CalibrationDownloads />} />
             <Route path="/settings" element={<EquipmentTypes />} />
             <Route path="/admin" element={<Admin />} />

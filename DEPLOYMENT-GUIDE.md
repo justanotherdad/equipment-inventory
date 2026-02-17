@@ -16,16 +16,22 @@ Add to `.env` for payment processing:
 
 **Forgot password:** Add your app's reset URL (e.g. `https://yourdomain.com/reset-password`) to Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
 
+
+## Deployment after build
+```bash
 cd "/Users/davefletes/Library/Mobile Documents/com~apple~CloudDocs/Buisness/DJ2/Applications/INVENTORY MANAGEMENT/Equipment Inventory"
 
 git add .
 git commit -m "Enables login and admin"
 git push origin main
+```
 
 
+## Updating password forgotten integration
+```bash
 For setup of forgotten password on login screen
 Supabase setup: Add your reset URL (e.g. https://yourdomain.com/reset-password) to Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
-
+```
 
 
 
