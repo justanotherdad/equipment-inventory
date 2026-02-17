@@ -11,6 +11,8 @@ interface CalRecord {
   equipment_id: number;
   file_name: string;
   uploaded_at: string;
+  cal_date?: string | null;
+  due_date?: string | null;
   equipment_make?: string;
   equipment_model?: string;
   equipment_serial?: string;
@@ -113,6 +115,8 @@ export default function CalibrationDownloads() {
                     <th style={{ width: '40px' }}></th>
                     <th>Equipment</th>
                     <th>File</th>
+                    <th>Cal Date</th>
+                    <th>Due Date</th>
                     <th>Uploaded</th>
                     <th></th>
                   </tr>
@@ -144,6 +148,8 @@ export default function CalibrationDownloads() {
                           {r.file_name}
                         </button>
                       </td>
+                      <td>{r.cal_date ? format(new Date(r.cal_date), 'MMM d, yyyy') : '—'}</td>
+                      <td>{r.due_date ? format(new Date(r.due_date), 'MMM d, yyyy') : '—'}</td>
                       <td>{format(new Date(r.uploaded_at), 'MMM d, yyyy')}</td>
                       <td>
                         <button
@@ -188,6 +194,14 @@ export default function CalibrationDownloads() {
                         >
                           {r.file_name}
                         </button>
+                      </div>
+                      <div className="mobile-card-row">
+                        <span className="mobile-card-label">Cal Date</span>
+                        <span className="mobile-card-value">{r.cal_date ? format(new Date(r.cal_date), 'MMM d, yyyy') : '—'}</span>
+                      </div>
+                      <div className="mobile-card-row">
+                        <span className="mobile-card-label">Due Date</span>
+                        <span className="mobile-card-value">{r.due_date ? format(new Date(r.due_date), 'MMM d, yyyy') : '—'}</span>
                       </div>
                     </div>
                   </div>

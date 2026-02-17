@@ -52,6 +52,8 @@ export interface CalibrationRecord {
   file_name: string;
   storage_path: string;
   uploaded_at: string;
+  cal_date?: string | null;
+  due_date?: string | null;
 }
 
 export interface EquipmentRequest {
@@ -393,6 +395,28 @@ export class Database {
       .from('companies')
       .update(payload)
       .eq('id', companyId);
+    if (error) throw error;
+  }
+
+  async getSubscriptionOrders(companyId: number): Promise<{ id: number; amount_cents: number; plan_name: string | null; status: string; created_at: string }[]> {
+    const { data, error } = await this.supabase
+      .from('subscription_orders')
+      .select('id, amount_cents, plan_name, status, created_at')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    if (error) return [];
+    return (data ?? []) as { id: number; amount_cents: number; plan_name: string | null; status: string; created_at: string }[];
+  }
+
+  async createSubscriptionOrder(companyId: number, data: { square_order_id?: string; square_payment_id?: string; amount_cents: number; plan_name?: string; status?: string }) {
+    const { error } = await this.supabase.from('subscription_orders').insert({
+      company_id: companyId,
+      square_order_id: data.square_order_id ?? null,
+      square_payment_id: data.square_payment_id ?? null,
+      amount_cents: data.amount_cents,
+      plan_name: data.plan_name ?? null,
+      status: data.status ?? 'completed',
+    });
     if (error) throw error;
   }
 
@@ -1170,12 +1194,24 @@ export class Database {
     return data as CalibrationRecord;
   }
 
-  async addCalibrationRecord(equipmentId: number, fileName: string, storagePath: string) {
-    const { error } = await this.supabase.from('calibration_records').insert({
+  async addCalibrationRecord(equipmentId: number, fileName: string, storagePath: string, calDate?: string | null, dueDate?: string | null) {
+    const payload: Record<string, unknown> = {
       equipment_id: equipmentId,
       file_name: fileName,
       storage_path: storagePath,
-    });
+    };
+    if (calDate) payload.cal_date = calDate;
+    if (dueDate) payload.due_date = dueDate;
+    const { error } = await this.supabase.from('calibration_records').insert(payload);
+    if (error) throw error;
+  }
+
+  async updateCalibrationRecord(id: number, data: { cal_date?: string | null; due_date?: string | null }) {
+    const payload: Record<string, unknown> = {};
+    if (data.cal_date !== undefined) payload.cal_date = data.cal_date;
+    if (data.due_date !== undefined) payload.due_date = data.due_date;
+    if (Object.keys(payload).length === 0) return;
+    const { error } = await this.supabase.from('calibration_records').update(payload).eq('id', id);
     if (error) throw error;
   }
 

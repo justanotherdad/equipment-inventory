@@ -6,6 +6,7 @@ import fs from 'fs';
 import multer from 'multer';
 import archiver from 'archiver';
 import { createClient } from '@supabase/supabase-js';
+import { SquareClient, SquareEnvironment } from 'square';
 import { Database } from './database';
 import { authMiddleware } from './auth';
 
@@ -23,6 +24,15 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const db = new Database(supabaseUrl, supabaseServiceKey);
+
+const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
+const squareLocationId = process.env.SQUARE_LOCATION_ID;
+const squareClient = squareAccessToken && squareLocationId
+  ? new SquareClient({
+      token: squareAccessToken,
+      environment: process.env.SQUARE_ENV === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    })
+  : null;
 
 // Multer for PDF uploads (memory storage - we'll upload to Supabase)
 const upload = multer({
@@ -323,8 +333,27 @@ app.post('/api/calibration-records/equipment/:equipmentId', upload.single('pdf')
       });
     if (uploadErr) throw uploadErr;
 
-    await db.addCalibrationRecord(equipmentId, req.file.originalname, storagePath);
+    const calDate = req.body?.cal_date || null;
+    const dueDate = req.body?.due_date || null;
+    await db.addCalibrationRecord(equipmentId, req.file.originalname, storagePath, calDate || undefined, dueDate || undefined);
     res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.put('/api/calibration-records/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { cal_date, due_date } = req.body || {};
+    const rec = await db.getCalibrationRecordById(id);
+    if (!rec) return res.status(404).json({ error: 'Record not found' });
+    if (req.profile?.role === 'company_admin') {
+      const eq = await db.getEquipmentById(rec.equipment_id, req.profile);
+      if (!eq) return res.status(403).json({ error: 'Access denied' });
+    }
+    await db.updateCalibrationRecord(id, { cal_date: cal_date || null, due_date: due_date || null });
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
@@ -746,6 +775,55 @@ app.put('/api/admin/companies/:id', adminOnly, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/payments/orders', companyAdminOnly, async (req, res) => {
+  try {
+    const companyId = req.profile?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company not found' });
+    const orders = await db.getSubscriptionOrders(companyId);
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/payments/process', companyAdminOnly, async (req, res) => {
+  try {
+    const companyId = req.profile?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company not found' });
+    const { sourceId, amountCents, planName, idempotencyKey } = req.body;
+    if (!sourceId || typeof amountCents !== 'number' || amountCents < 1) {
+      return res.status(400).json({ error: 'sourceId and amountCents (positive) required' });
+    }
+    if (!squareClient) {
+      return res.status(503).json({ error: 'Square payments not configured. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID.' });
+    }
+    const idemKey = idempotencyKey || `sub-${companyId}-${Date.now()}`;
+    const response = await squareClient.payments.create({
+      sourceId,
+      idempotencyKey: idemKey,
+      amountMoney: { amount: BigInt(amountCents), currency: 'USD' },
+      locationId: squareLocationId!,
+    });
+    const result = response.body;
+    if (response.statusCode !== 200 || !result.payment?.id) {
+      return res.status(400).json({ error: (result as { errors?: { detail?: string }[] }).errors?.[0]?.detail || 'Payment failed' });
+    }
+    try {
+      await db.createSubscriptionOrder(companyId, {
+        square_payment_id: result.payment.id,
+        amount_cents: amountCents,
+        plan_name: planName || null,
+        status: 'completed',
+      });
+    } catch {
+      // Order record may fail if table doesn't exist; payment still succeeded
+    }
+    res.json({ ok: true, paymentId: result.payment.id });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Payment failed' });
   }
 });
 

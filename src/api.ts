@@ -77,6 +77,11 @@ export const api = {
     closeCompany: (id: number, confirm: string) =>
       request(`/api/admin/companies/${id}/close`, { method: 'POST', body: JSON.stringify({ confirm }) }),
   },
+  payments: {
+    getOrders: () => request<{ id: number; amount_cents: number; plan_name: string | null; status: string; created_at: string }[]>('/api/payments/orders'),
+    process: (data: { sourceId: string; amountCents: number; planName?: string; idempotencyKey?: string }) =>
+      request<{ ok: boolean; paymentId?: string }>('/api/payments/process', { method: 'POST', body: JSON.stringify(data) }),
+  },
   departments: {
     getAll: () => request<{ id: number; site_id: number; name: string; site_name?: string }[]>('/api/departments'),
   },
@@ -124,14 +129,18 @@ export const api = {
   calibrationRecords: {
     getAll: () => request('/api/calibration-records'),
     getByEquipment: (equipmentId: number) => request(`/api/calibration-records/equipment/${equipmentId}`),
-    add: async (equipmentId: number, file: File) => {
+    add: async (equipmentId: number, file: File, calDate?: string | null, dueDate?: string | null) => {
       const form = new FormData();
       form.append('pdf', file);
+      if (calDate) form.append('cal_date', calDate);
+      if (dueDate) form.append('due_date', dueDate);
       await request(`/api/calibration-records/equipment/${equipmentId}`, {
         method: 'POST',
         body: form,
       });
     },
+    update: (id: number, data: { cal_date?: string | null; due_date?: string | null }) =>
+      request(`/api/calibration-records/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request(`/api/calibration-records/${id}`, { method: 'DELETE' }),
     getDownloadUrl: (id: number) => `${API_BASE}/api/calibration-records/${id}/download`,
     /** Fetch PDF with auth and open in new tab (avoids "Authentication required" when using direct link) */

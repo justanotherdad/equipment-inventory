@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Users, Building2, FolderTree, CreditCard, Pencil, Trash2, UserPlus } from 'lucide-react';
 import AccessCheckboxes from '../components/AccessCheckboxes';
 import PasswordInput from '../components/PasswordInput';
@@ -63,6 +63,8 @@ interface Company {
   subscription_level: number;
   subscription_active: boolean;
   subscription_activated_at: string | null;
+  subscription_expires_at?: string | null;
+  subscription_plan_name?: string | null;
 }
 
 export default function Admin() {
@@ -104,6 +106,9 @@ export default function Admin() {
   const [createCompanyWithAdmin, setCreateCompanyWithAdmin] = useState(true);
   const [deleteCompanyModal, setDeleteCompanyModal] = useState<Company | null>(null);
   const [closeCompanyModal, setCloseCompanyModal] = useState(false);
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [showReceiptsModal, setShowReceiptsModal] = useState(false);
+  const [subscriptionOrders, setSubscriptionOrders] = useState<{ id: number; amount_cents: number; plan_name: string | null; status: string; created_at: string }[]>([]);
   const [closeCompanyConfirm, setCloseCompanyConfirm] = useState('');
   const [closingCompany, setClosingCompany] = useState(false);
 
@@ -171,6 +176,12 @@ export default function Admin() {
       api.admin.getCompany(profile.company_id).then((c) => setCompanyForm(c)).catch(() => setCompanyForm({}));
     }
   }, [selectedCompanyId, isSuperAdmin, profile?.role, profile?.company_id]);
+
+  useEffect(() => {
+    if (showOrderHistory && profile?.role === 'company_admin') {
+      api.payments.getOrders().then(setSubscriptionOrders).catch(() => setSubscriptionOrders([]));
+    }
+  }, [showOrderHistory, profile?.role]);
 
   const loadProfileAccess = async (profileId: number) => {
     try {
@@ -555,6 +566,38 @@ export default function Admin() {
                     onChange={(e) => setCompanyForm((f) => ({ ...f, address_line2: e.target.value }))}
                     style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
                   />
+                </div>
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: '1rem', paddingTop: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: 600 }}>Subscription</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Current plan</span>
+                      <span style={{ fontWeight: 500 }}>
+                        {companyForm.subscription_plan_name || (companyForm.subscription_level === 0 ? 'Free' : companyForm.subscription_level === 1 ? 'Basic' : companyForm.subscription_level === 2 ? 'Pro' : 'Enterprise')}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Expires</span>
+                      <span style={{ fontSize: '0.9rem' }}>
+                        {companyForm.subscription_expires_at
+                          ? new Date(companyForm.subscription_expires_at).toLocaleDateString()
+                          : companyForm.subscription_activated_at
+                            ? new Date(companyForm.subscription_activated_at).toLocaleDateString() + ' (activated)'
+                            : '—'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      <Link to="/pricing" className="btn btn-primary" style={{ fontSize: '0.85rem', textDecoration: 'none' }}>
+                        Upgrade
+                      </Link>
+                      <button type="button" className="btn btn-outline" style={{ fontSize: '0.85rem' }} onClick={() => setShowOrderHistory(true)}>
+                        Order History
+                      </button>
+                      <button type="button" className="btn btn-outline" style={{ fontSize: '0.85rem' }} onClick={() => setShowReceiptsModal(true)}>
+                        Receipts
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div className="admin-address-grid">
                   <div className="form-group">
@@ -1136,6 +1179,63 @@ export default function Admin() {
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => { setCloseCompanyModal(false); setCloseCompanyConfirm(''); setError(''); }}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order History Modal */}
+      {showOrderHistory && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowOrderHistory(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 520, width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Order History</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Past subscription and upgrade orders.
+            </p>
+            {subscriptionOrders.length === 0 ? (
+              <div className="empty-state" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <p>No orders yet.</p>
+              </div>
+            ) : (
+              <div className="table-container" style={{ marginBottom: '1rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Plan</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subscriptionOrders.map((o) => (
+                      <tr key={o.id}>
+                        <td>{new Date(o.created_at).toLocaleDateString()}</td>
+                        <td>{o.plan_name || '—'}</td>
+                        <td>${(o.amount_cents / 100).toFixed(2)}</td>
+                        <td>{o.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <button type="button" className="btn btn-secondary" style={{ marginTop: '0.5rem' }} onClick={() => setShowOrderHistory(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Receipts Modal */}
+      {showReceiptsModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowReceiptsModal(false)}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 480, width: '90%', maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Receipts</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Download receipts for past payments. Square integration coming soon.
+            </p>
+            <div className="empty-state" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <p>No receipts yet.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={() => setShowReceiptsModal(false)}>Close</button>
           </div>
         </div>
       )}

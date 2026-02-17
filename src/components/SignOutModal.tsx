@@ -117,6 +117,32 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
           </div>
           <div className="form-group">
             <label>Purpose (optional)</label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              <button
+                type="button"
+                className={`btn ${purpose === 'Calibration' ? 'btn-primary' : 'btn-outline'}`}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                onClick={() => setPurpose('Calibration')}
+              >
+                Calibration
+              </button>
+              <button
+                type="button"
+                className={`btn ${purpose === 'Field mapping' ? 'btn-primary' : 'btn-outline'}`}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                onClick={() => setPurpose('Field mapping')}
+              >
+                Field mapping
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                onClick={() => setPurpose('')}
+              >
+                Clear
+              </button>
+            </div>
             <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Field mapping for Unit #5" />
           </div>
           <div className="form-group">

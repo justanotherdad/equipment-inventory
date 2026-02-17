@@ -44,6 +44,8 @@ interface CalRecord {
   file_path?: string;
   download_url?: string;
   uploaded_at: string;
+  cal_date?: string | null;
+  due_date?: string | null;
 }
 
 export default function EquipmentDetail() {
@@ -55,6 +57,8 @@ export default function EquipmentDetail() {
   const [calRecords, setCalRecords] = useState<CalRecord[]>([]);
   const [showEdit, setShowEdit] = useState(false);
   const [addingPdf, setAddingPdf] = useState(false);
+  const [addCalDate, setAddCalDate] = useState('');
+  const [addDueDate, setAddDueDate] = useState('');
 
   const load = async () => {
     if (!equipmentId) return;
@@ -82,7 +86,9 @@ export default function EquipmentDetail() {
     if (!equipmentId || addingPdf || !file) return;
     setAddingPdf(true);
     try {
-      await api.calibrationRecords.add(equipmentId, file);
+      await api.calibrationRecords.add(equipmentId, file, addCalDate || undefined, addDueDate || undefined);
+      setAddCalDate('');
+      setAddDueDate('');
       load();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to upload PDF');
@@ -194,57 +200,85 @@ export default function EquipmentDetail() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
           <h3 className="card-title" style={{ margin: 0 }}>Calibration Records</h3>
-          <label className="btn btn-primary" style={{ margin: 0, cursor: addingPdf ? 'not-allowed' : 'pointer' }}>
-            <Plus size={18} /> Add PDF
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={handleAddPdf}
-              disabled={addingPdf}
-              style={{ display: 'none' }}
-            />
-          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={addCalDate}
+                onChange={(e) => setAddCalDate(e.target.value)}
+                placeholder="Cal date"
+                style={{ padding: '0.4rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit', fontSize: '0.875rem' }}
+              />
+              <input
+                type="date"
+                value={addDueDate}
+                onChange={(e) => setAddDueDate(e.target.value)}
+                placeholder="Due date"
+                style={{ padding: '0.4rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit', fontSize: '0.875rem' }}
+              />
+            </div>
+            <label className="btn btn-primary" style={{ margin: 0, cursor: addingPdf ? 'not-allowed' : 'pointer' }}>
+              <Plus size={18} /> Add PDF
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={handleAddPdf}
+                disabled={addingPdf}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
         </div>
         {calRecords.length === 0 ? (
           <div className="empty-state">
             <p>No calibration records. Add PDF scans of calibration certificates.</p>
           </div>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {calRecords.map((r) => (
-              <li key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FileText size={18} color="var(--text-muted)" />
-                  <button
-                    type="button"
-                    onClick={() => handleOpenPdf(r)}
-                    className="link"
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
-                  >
-                    {r.file_name}
-                  </button>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    {format(new Date(r.uploaded_at), 'MMM d, yyyy')}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
-                    onClick={() => handleOpenPdf(r)}
-                  >
-                    Open
-                  </button>
-                  <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleDeleteRecord(r.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Cal Date</th>
+                  <th>Due Date</th>
+                  <th>Uploaded</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {calRecords.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenPdf(r)}
+                        className="link"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
+                      >
+                        <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+                        {r.file_name}
+                      </button>
+                    </td>
+                    <td>{r.cal_date ? format(new Date(r.cal_date), 'MMM d, yyyy') : '—'}</td>
+                    <td>{r.due_date ? format(new Date(r.due_date), 'MMM d, yyyy') : '—'}</td>
+                    <td style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{format(new Date(r.uploaded_at), 'MMM d, yyyy')}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleOpenPdf(r)}>
+                          Open
+                        </button>
+                        <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleDeleteRecord(r.id)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
