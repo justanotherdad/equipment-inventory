@@ -22,7 +22,7 @@ Add to `.env` for payment processing:
 cd "/Users/davefletes/Library/Mobile Documents/com~apple~CloudDocs/Buisness/DJ2/Applications/INVENTORY MANAGEMENT/Equipment Inventory"
 
 git add .
-git commit -m "Enables login and admin"
+git commit -m "Add heat map, equipment testted, and equipment status"
 git push origin main
 ```
 

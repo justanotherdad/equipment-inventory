@@ -267,18 +267,18 @@ export default function EquipmentList() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem', alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ position: 'relative', maxWidth: '320px', flex: '1 1 200px' }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '1rem', marginBottom: '1rem', alignItems: 'center', overflowX: 'auto', minWidth: 0 }}>
+          <div className="form-group" style={{ position: 'relative', flex: '1 1 0', minWidth: 0 }}>
             <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               type="text"
               placeholder="Search..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              style={{ paddingLeft: '2.5rem' }}
+              style={{ paddingLeft: '2.5rem', width: '100%' }}
             />
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
@@ -447,9 +447,9 @@ export default function EquipmentList() {
             <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: '#f97316', marginRight: 4 }} /> Calibration</span>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 600 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: `120px repeat(${daysInMonth.days.length}, minmax(24px, 1fr))`, gap: 2, fontSize: '0.7rem' }}>
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <div style={{ width: '100%', minWidth: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `minmax(100px, 140px) repeat(${daysInMonth.days.length}, minmax(0, 1fr))`, gap: 2, fontSize: '0.7rem', width: '100%' }}>
               <div style={{ padding: '4px 6px', fontWeight: 600 }}>Equipment</div>
               {daysInMonth.days.map((d) => (
                 <div key={d} style={{ padding: '4px 2px', fontWeight: 600, textAlign: 'center' }}>{d}</div>
