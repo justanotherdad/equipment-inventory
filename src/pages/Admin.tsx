@@ -67,6 +67,12 @@ interface Company {
   subscription_plan_name?: string | null;
 }
 
+const PLAN_NAMES: Record<number, string> = { 1: 'Basic', 2: 'Standard', 3: 'Professional', 4: 'Enterprise' };
+function getPlanName(level: number | undefined | null): string {
+  if (level == null || level === undefined) return '—';
+  return PLAN_NAMES[level] ?? `Level ${level}`;
+}
+
 export default function Admin() {
   const { profile } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -174,6 +180,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (selectedCompanyId && isSuperAdmin) {
+      setCompanyForm({});
       api.admin.getCompany(selectedCompanyId).then((c) => setCompanyForm(c)).catch(() => setCompanyForm({}));
     } else if (profile?.role === 'company_admin' && profile?.company_id) {
       api.admin.getCompany(profile.company_id).then((c) => setCompanyForm(c)).catch(() => setCompanyForm({}));
@@ -584,7 +591,7 @@ export default function Admin() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Current plan</span>
                       <span style={{ fontWeight: 500 }}>
-                        {companyForm.subscription_plan_name || (companyForm.subscription_level === 0 ? 'Free' : companyForm.subscription_level === 1 ? 'Basic' : companyForm.subscription_level === 2 ? 'Pro' : 'Enterprise')}
+                        {companyForm.subscription_plan_name || getPlanName(companyForm.subscription_level)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -594,7 +601,7 @@ export default function Admin() {
                           ? new Date(companyForm.subscription_expires_at).toLocaleDateString()
                           : companyForm.subscription_activated_at
                             ? new Date(companyForm.subscription_activated_at).toLocaleDateString() + ' (activated)'
-                            : '—'}
+                            : 'Not set'}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
@@ -704,7 +711,7 @@ export default function Admin() {
                 <div>
                   <h3 className="card-title"><CreditCard size={20} /> Subscriptions</h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
-                    Enable or disable subscription per company. Level 1–4 controls limits.
+                    Enable or disable subscription per company. Basic, Standard, Professional, Enterprise control limits.
                   </p>
                 </div>
                 <button type="button" className="btn btn-primary" onClick={() => setAddCompanyModal(true)}>Add Company</button>
@@ -715,7 +722,7 @@ export default function Admin() {
                   { key: 'contact_name', label: 'Contact', value: (r) => r.contact_name ?? '' },
                   { key: 'contact_email', label: 'Email', value: (r) => r.contact_email ?? '' },
                   { key: 'status', label: 'Status', render: (r) => (r.subscription_active ? 'Active' : 'Disabled') },
-                  { key: 'subscription_level', label: 'Level', render: (r) => `Level ${r.subscription_level}` },
+                  { key: 'subscription_level', label: 'Plan', render: (r) => getPlanName(r.subscription_level) },
                   { key: 'active', label: 'Active', render: (r) => (
                     <input type="checkbox" checked={r.subscription_active} onChange={(e) => handleSubscriptionToggle(r.id, e.target.checked)} />
                   )},
@@ -1086,10 +1093,10 @@ export default function Admin() {
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Subscription Level</label>
                   <select name="subLevel" defaultValue={editSubscriptionForm.subscription_level ?? editSubscriptionModal.subscription_level ?? 1} style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}>
-                    <option value={1}>Level 1</option>
-                    <option value={2}>Level 2</option>
-                    <option value={3}>Level 3</option>
-                    <option value={4}>Level 4</option>
+                    <option value={1}>Basic</option>
+                    <option value={2}>Standard</option>
+                    <option value={3}>Professional</option>
+                    <option value={4}>Enterprise</option>
                   </select>
                 </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>

@@ -3,7 +3,7 @@ import { Check, X, Package, ArrowLeft } from 'lucide-react';
 
 const tiers = [
   {
-    name: 'Level 1',
+    name: 'Basic',
     price: '$0',
     period: 'forever',
     description: 'Ideal for small teams',
@@ -18,7 +18,7 @@ const tiers = [
     highlight: false,
   },
   {
-    name: 'Level 2',
+    name: 'Standard',
     price: '$0',
     period: 'forever',
     description: 'For growing teams',
@@ -33,7 +33,7 @@ const tiers = [
     highlight: true,
   },
   {
-    name: 'Level 3',
+    name: 'Professional',
     price: '$0',
     period: 'forever',
     description: 'For larger organizations',
@@ -48,7 +48,7 @@ const tiers = [
     highlight: false,
   },
   {
-    name: 'Level 4',
+    name: 'Enterprise',
     price: '$0',
     period: 'forever',
     description: 'Enterprise',
