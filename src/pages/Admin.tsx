@@ -139,9 +139,12 @@ export default function Admin() {
         const s = results[1] as Site[];
         if (s.length && !newDeptSiteId) setNewDeptSiteId(String(s[0].id));
         if (isSuperAdmin && results[4]) {
-          setCompanies(results[4] as Company[]);
-          if (!selectedCompanyId && (results[4] as Company[]).length) {
-            setSelectedCompanyId((results[4] as Company[])[0].id);
+          const companiesList = results[4] as Company[];
+          setCompanies(companiesList);
+          if (!selectedCompanyId && companiesList.length) {
+            // Pre-select superadmin's linked company if they have one; otherwise leave unselected
+            const linked = profile?.company_id && companiesList.some((c) => c.id === profile.company_id);
+            setSelectedCompanyId(linked ? profile!.company_id! : null);
           }
         }
         if (profile?.role === 'company_admin' && profile?.company_id) {
@@ -174,6 +177,8 @@ export default function Admin() {
       api.admin.getCompany(selectedCompanyId).then((c) => setCompanyForm(c)).catch(() => setCompanyForm({}));
     } else if (profile?.role === 'company_admin' && profile?.company_id) {
       api.admin.getCompany(profile.company_id).then((c) => setCompanyForm(c)).catch(() => setCompanyForm({}));
+    } else if (isSuperAdmin && !selectedCompanyId) {
+      setCompanyForm({});
     }
   }, [selectedCompanyId, isSuperAdmin, profile?.role, profile?.company_id]);
 
@@ -506,10 +511,16 @@ export default function Admin() {
                     onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value, 10) : null)}
                     style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
                   >
+                    <option value="">Select company...</option>
                     {companies.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  {!selectedCompanyId && (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem', marginBottom: 0 }}>
+                      Select a company to view and edit its information.
+                    </p>
+                  )}
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
