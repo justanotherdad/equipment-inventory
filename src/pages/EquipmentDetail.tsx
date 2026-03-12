@@ -48,6 +48,106 @@ interface CalRecord {
   due_date?: string | null;
 }
 
+const dateInputStyle: React.CSSProperties = {
+  padding: '0.4rem',
+  borderRadius: 6,
+  border: '1px solid var(--border)',
+  background: 'var(--bg-primary)',
+  color: 'inherit',
+  fontSize: '0.875rem',
+  width: '100%',
+  minWidth: '120px',
+};
+
+function CalRecordRow({
+  record,
+  onOpenPdf,
+  onDelete,
+  onDatesUpdated,
+}: {
+  record: CalRecord;
+  onOpenPdf: () => void;
+  onDelete: () => void;
+  onDatesUpdated: () => void;
+}) {
+  const [calDate, setCalDate] = useState(record.cal_date ? record.cal_date.slice(0, 10) : '');
+  const [dueDate, setDueDate] = useState(record.due_date ? record.due_date.slice(0, 10) : '');
+  const [saving, setSaving] = useState(false);
+
+  const saveDates = async (cal: string, due: string) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api.calibrationRecords.update(record.id, {
+        cal_date: cal || null,
+        due_date: due || null,
+      });
+      onDatesUpdated();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update dates');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCalDateChange = (value: string) => {
+    setCalDate(value);
+    saveDates(value, dueDate);
+  };
+
+  const handleDueDateChange = (value: string) => {
+    setDueDate(value);
+    saveDates(calDate, value);
+  };
+
+  return (
+    <tr>
+      <td>
+        <button
+          type="button"
+          onClick={onOpenPdf}
+          className="link"
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
+        >
+          <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+          {record.file_name}
+        </button>
+      </td>
+      <td>
+        <input
+          type="date"
+          value={calDate}
+          onChange={(e) => handleCalDateChange(e.target.value)}
+          style={dateInputStyle}
+          disabled={saving}
+          title="Calibration date"
+        />
+      </td>
+      <td>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => handleDueDateChange(e.target.value)}
+          style={dateInputStyle}
+          disabled={saving}
+          title="Due date"
+        />
+      </td>
+      <td style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{format(new Date(record.uploaded_at), 'MMM d, yyyy')}</td>
+      <td>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={onOpenPdf}>
+            Open
+          </button>
+          <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={onDelete}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function EquipmentDetail() {
   const { id } = useParams<{ id: string }>();
   const equipmentId = id ? parseInt(id, 10) : 0;
@@ -249,32 +349,13 @@ export default function EquipmentDetail() {
               </thead>
               <tbody>
                 {calRecords.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPdf(r)}
-                        className="link"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
-                      >
-                        <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-                        {r.file_name}
-                      </button>
-                    </td>
-                    <td>{r.cal_date ? format(new Date(r.cal_date), 'MMM d, yyyy') : '—'}</td>
-                    <td>{r.due_date ? format(new Date(r.due_date), 'MMM d, yyyy') : '—'}</td>
-                    <td style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{format(new Date(r.uploaded_at), 'MMM d, yyyy')}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleOpenPdf(r)}>
-                          Open
-                        </button>
-                        <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => handleDeleteRecord(r.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <CalRecordRow
+                    key={r.id}
+                    record={r}
+                    onOpenPdf={() => handleOpenPdf(r)}
+                    onDelete={() => handleDeleteRecord(r.id)}
+                    onDatesUpdated={load}
+                  />
                 ))}
               </tbody>
             </table>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, addMonths } from 'date-fns';
 import { FileText } from 'lucide-react';
 import { api } from '../api';
@@ -10,6 +10,12 @@ interface EquipmentType {
   calibration_frequency_months: number | null;
 }
 
+interface Equipment {
+  id: number;
+  make: string;
+  model: string;
+}
+
 interface Props {
   equipmentId?: number;
   onClose: () => void;
@@ -19,6 +25,7 @@ interface Props {
 export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props) {
   const [types, setTypes] = useState<EquipmentType[]>([]);
   const [departments, setDepartments] = useState<{ id: number; site_id: number; name: string; site_name?: string }[]>([]);
+  const [existingEquipment, setExistingEquipment] = useState<Equipment[]>([]);
   const [form, setForm] = useState({
     equipment_type_id: 0,
     department_id: null as number | null,
@@ -37,7 +44,28 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
   useEffect(() => {
     api.equipmentTypes.getAll().then(setTypes);
     api.departments.getAll().then(setDepartments);
+    api.equipment.getAll().then((list: Equipment[]) => setExistingEquipment(list));
   }, []);
+
+  const { makes, models } = useMemo(() => {
+    const makesSet = new Set<string>();
+    const modelsByMake: Record<string, Set<string>> = {};
+    for (const e of existingEquipment) {
+      if (e.make?.trim()) {
+        makesSet.add(e.make.trim());
+        if (!modelsByMake[e.make.trim()]) modelsByMake[e.make.trim()] = new Set();
+        if (e.model?.trim()) modelsByMake[e.make.trim()].add(e.model.trim());
+      }
+    }
+    return {
+      makes: Array.from(makesSet).sort(),
+      models: form.make.trim()
+        ? Array.from(modelsByMake[form.make.trim()] ?? []).sort()
+        : Array.from(
+            new Set(existingEquipment.map((e) => e.model?.trim()).filter(Boolean) as string[])
+          ).sort(),
+    };
+  }, [existingEquipment, form.make]);
 
   useEffect(() => {
     if (types.length && !form.equipment_type_id) {
@@ -153,11 +181,33 @@ export default function EquipmentModal({ equipmentId, onClose, onSaved }: Props)
           <div className="form-row">
             <div className="form-group">
               <label>Make</label>
-              <input value={form.make} onChange={(e) => setForm((f) => ({ ...f, make: e.target.value }))} required />
+              <input
+                list="make-options"
+                value={form.make}
+                onChange={(e) => setForm((f) => ({ ...f, make: e.target.value }))}
+                placeholder="Select or type"
+                required
+              />
+              <datalist id="make-options">
+                {makes.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
             <div className="form-group">
               <label>Model</label>
-              <input value={form.model} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} required />
+              <input
+                list="model-options"
+                value={form.model}
+                onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+                placeholder="Select or type"
+                required
+              />
+              <datalist id="model-options">
+                {models.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
           </div>
           <div className="form-row">
