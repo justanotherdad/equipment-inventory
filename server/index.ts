@@ -967,7 +967,8 @@ if (fs.existsSync(distPath)) {
   app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 }
 
-app.listen(PORT, () => {
-  console.log(`Equipment Inventory server running at http://localhost:${PORT}`);
+const HOST = process.env.HOST ?? '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`Equipment Inventory server listening on http://${HOST}:${PORT}`);
   console.log(`Using Supabase for database and storage`);
 });
