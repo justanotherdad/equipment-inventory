@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload } from 'lucide-react';
+import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload, Download } from 'lucide-react';
 import EquipmentModal from '../components/EquipmentModal';
 import EquipmentImportModal from '../components/EquipmentImportModal';
 import BulkEditModal from '../components/BulkEditModal';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { buildCsvRow } from '../utils/csvExport';
 
 type EquipmentStatus = 'available' | 'checked_out' | 'out_for_calibration';
 
@@ -20,6 +21,7 @@ interface Equipment {
   equipment_number: string | null;
   last_calibration_date: string | null;
   next_calibration_due: string | null;
+  notes?: string | null;
 }
 
 interface SignOutRecord {
@@ -210,6 +212,41 @@ export default function EquipmentList() {
     load();
   };
 
+  const handleExportCsv = () => {
+    const header = buildCsvRow([
+      'department_id',
+      'equipment_type_id',
+      'make',
+      'model',
+      'serial_number',
+      'equipment_number',
+      'last_calibration_date',
+      'next_calibration_due',
+      'notes',
+    ]);
+    const rows = sorted.map((e) =>
+      buildCsvRow([
+        e.department_id ?? '',
+        e.equipment_type_id ?? '',
+        e.make,
+        e.model,
+        e.serial_number,
+        e.equipment_number ?? '',
+        e.last_calibration_date ? e.last_calibration_date.slice(0, 10) : '',
+        e.next_calibration_due ? e.next_calibration_due.slice(0, 10) : '',
+        e.notes ?? '',
+      ])
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.download = `equipment-export-${stamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const daysInMonth = useMemo(() => {
     const d = new Date(heatMapMonth.year, heatMapMonth.month, 1);
     const days: number[] = [];
@@ -260,16 +297,20 @@ export default function EquipmentList() {
             </button>
           )}
           {canEdit && (
-            <>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
-                <Upload size={18} />
-                Import
-              </button>
-              <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                <Plus size={18} />
-                Add Equipment
-              </button>
-            </>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
+              <Upload size={18} />
+              Import
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={handleExportCsv} disabled={sorted.length === 0}>
+            <Download size={18} />
+            Export
+          </button>
+          {canEdit && (
+            <button type="button" className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <Plus size={18} />
+              Add Equipment
+            </button>
           )}
         </div>
       </div>
@@ -557,20 +598,20 @@ export default function EquipmentList() {
         </div>
       )}
 
-      {showImportModal && (
-        <EquipmentImportModal
-          onClose={() => setShowImportModal(false)}
-          onImported={() => {
-            load();
-          }}
-        />
-      )}
-
       {showModal && (
         <EquipmentModal
           onClose={() => setShowModal(false)}
           onSaved={() => {
             setShowModal(false);
+            load();
+          }}
+        />
+      )}
+
+      {showImportModal && (
+        <EquipmentImportModal
+          onClose={() => setShowImportModal(false)}
+          onImported={() => {
             load();
           }}
         />
