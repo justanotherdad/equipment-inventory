@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload } from 'lucide-react';
 import EquipmentModal from '../components/EquipmentModal';
+import EquipmentImportModal from '../components/EquipmentImportModal';
 import BulkEditModal from '../components/BulkEditModal';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
@@ -75,6 +76,7 @@ export default function EquipmentList() {
   const [filterMake, setFilterMake] = useState<string>('');
   const [filterModel, setFilterModel] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('serial_number');
@@ -258,10 +260,16 @@ export default function EquipmentList() {
             </button>
           )}
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-              <Plus size={18} />
-              Add Equipment
-            </button>
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
+                <Upload size={18} />
+                Import
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                <Plus size={18} />
+                Add Equipment
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -547,6 +555,15 @@ export default function EquipmentList() {
             )}
           </div>
         </div>
+      )}
+
+      {showImportModal && (
+        <EquipmentImportModal
+          onClose={() => setShowImportModal(false)}
+          onImported={() => {
+            load();
+          }}
+        />
       )}
 
       {showModal && (
