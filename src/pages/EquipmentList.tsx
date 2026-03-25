@@ -43,11 +43,13 @@ type SortKey =
   | 'make'
   | 'model'
   | 'serial_number'
+  | 'equipment_number'
   | 'status'
   | 'last_calibration_date'
   | 'next_calibration_due';
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'serial_number', label: 'Serial #' },
+  { key: 'equipment_number', label: 'Equip #' },
   { key: 'equipment_type_name', label: 'Type' },
   { key: 'department_name', label: 'Department' },
   { key: 'company_name', label: 'Company' },
@@ -428,7 +430,8 @@ export default function EquipmentList() {
                 )}
                 <th className="sortable" onClick={() => handleSort('make')}>Make {sortKey === 'make' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('model')}>Model {sortKey === 'model' && (sortAsc ? '↑' : '↓')}</th>
-                <th className="sortable" onClick={() => handleSort('serial_number')}>Serial / Equip # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('serial_number')}>Serial # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('equipment_number')}>Equip # {sortKey === 'equipment_number' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('status')}>Status {sortKey === 'status' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('last_calibration_date')}>Last Cal {sortKey === 'last_calibration_date' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('next_calibration_due')}>Next Cal Due {sortKey === 'next_calibration_due' && (sortAsc ? '↑' : '↓')}</th>
@@ -452,7 +455,8 @@ export default function EquipmentList() {
                   {isSuperAdmin && <td>{e.company_name ?? '—'}</td>}
                   <td>{e.make}</td>
                   <td>{e.model}</td>
-                  <td>{e.equipment_number ? `#${e.equipment_number}` : e.serial_number}</td>
+                  <td>{e.serial_number}</td>
+                  <td>{e.equipment_number ? `#${e.equipment_number}` : '—'}</td>
                   <td>
                     <span className={`status-badge status-${e.status}`} style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', borderRadius: 6 }}>
                       {STATUS_LABELS[e.status]}
@@ -506,8 +510,12 @@ export default function EquipmentList() {
                 </span>
               </div>
               <div className="mobile-card-row">
-                <span className="mobile-card-label">Serial / #</span>
-                <span className="mobile-card-value">{e.equipment_number ? `#${e.equipment_number}` : e.serial_number}</span>
+                <span className="mobile-card-label">Serial #</span>
+                <span className="mobile-card-value">{e.serial_number}</span>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equip #</span>
+                <span className="mobile-card-value">{e.equipment_number ? `#${e.equipment_number}` : '—'}</span>
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Next Cal</span>
@@ -636,7 +644,13 @@ export default function EquipmentList() {
                     color: 'var(--text-primary)',
                   }}
                 >
-                  <span>{eq.make} {eq.model} {eq.equipment_number ? `#${eq.equipment_number}` : eq.serial_number}</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+                    <span>{eq.make} {eq.model}</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      S/N {eq.serial_number}
+                      {eq.equipment_number ? ` · Equip #${eq.equipment_number}` : ''}
+                    </span>
+                  </span>
                   <span className={`status-badge status-${eq.dayStatus}`} style={{ fontSize: '0.75rem' }}>
                     {STATUS_LABELS[eq.dayStatus]}
                   </span>
