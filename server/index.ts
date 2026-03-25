@@ -11,7 +11,7 @@ import { Database } from './database';
 import { authMiddleware } from './auth';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT ?? '', 10) || 3000;
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
@@ -935,7 +935,7 @@ app.post('/api/admin/companies/:id/close', companyAdminOnly, async (req, res) =>
 
 app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
   try {
-    const { email, password, access, role, company_id } = req.body;
+    const { email, password, access, role, company_id, display_name } = req.body;
     if (!email?.trim() || !password?.trim()) return res.status(400).json({ error: 'email and password are required' });
     const allowedRoles = ['user', 'equipment_manager', 'company_admin', 'super_admin'] as const;
     const assignedRole = allowedRoles.includes(role) ? role : 'user';
@@ -946,13 +946,15 @@ app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
     });
     if (authErr) return res.status(400).json({ error: authErr.message });
     if (!authUser?.user?.id) return res.status(500).json({ error: 'Failed to create user' });
+    const nameTrim = typeof display_name === 'string' ? display_name.trim() : '';
     const profile = await db.createUserProfile(
       authUser.user.id,
       email.trim().toLowerCase(),
       assignedRole,
       req.profile,
       Array.isArray(access) ? access : [],
-      company_id != null ? Number(company_id) : undefined
+      company_id != null ? Number(company_id) : undefined,
+      nameTrim || null
     );
     res.status(201).json({ id: profile.id, email: profile.email });
   } catch (err) {

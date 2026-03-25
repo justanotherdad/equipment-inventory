@@ -39,10 +39,30 @@ function getCell(row: Record<string, string>, ...aliases: string[]): string {
   return '';
 }
 
+const MONTH_ABBREV: Record<string, string> = {
+  jan: '01',
+  feb: '02',
+  mar: '03',
+  apr: '04',
+  may: '05',
+  jun: '06',
+  jul: '07',
+  aug: '08',
+  sep: '09',
+  oct: '10',
+  nov: '11',
+  dec: '12',
+};
+
 function normalizeDate(s: string): string | null {
   const t = s.trim();
   if (!t) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const dmy = t.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (dmy) {
+    const mon = MONTH_ABBREV[dmy[2].toLowerCase().slice(0, 3)];
+    if (mon) return `${dmy[3]}-${mon}-${dmy[1].padStart(2, '0')}`;
+  }
   const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) {
     const mo = m[1].padStart(2, '0');
@@ -54,17 +74,27 @@ function normalizeDate(s: string): string | null {
   return null;
 }
 
+/** Strip UI labels like " (Cal every 12 mo)" or " (no cal)" from exported equipment type text. */
+function normalizeEquipmentTypeName(raw: string): string {
+  return raw
+    .replace(/\s*\(cal every\s+\d+\s*mo\)/gi, '')
+    .replace(/\s*\(no cal\)/gi, '')
+    .trim();
+}
+
 function resolveDepartmentId(
   row: Record<string, string>,
   departments: Department[]
 ): { id: number | null; error?: string } {
-  const idStr = getCell(row, 'department_id', 'dept_id');
-  if (idStr && /^\d+$/.test(idStr)) {
-    const id = parseInt(idStr, 10);
+  const deptIdRaw = getCell(row, 'department_id', 'dept_id');
+  if (deptIdRaw && /^\d+$/.test(deptIdRaw)) {
+    const id = parseInt(deptIdRaw, 10);
     if (departments.some((d) => d.id === id)) return { id };
     return { id: null, error: `Unknown department_id ${id}` };
   }
-  const name = getCell(row, 'department', 'dept');
+  const nameFromDeptCol = getCell(row, 'department', 'dept');
+  const nameFromIdCol = deptIdRaw && !/^\d+$/.test(deptIdRaw) ? deptIdRaw : '';
+  const name = nameFromDeptCol || nameFromIdCol;
   if (!name) return { id: null };
   const lower = name.toLowerCase();
   const exact = departments.find((d) => d.name.toLowerCase() === lower);
@@ -80,18 +110,29 @@ function resolveEquipmentTypeId(
   row: Record<string, string>,
   types: EquipmentType[]
 ): { id: number | null; error?: string } {
-  const idStr = getCell(row, 'equipment_type_id', 'type_id');
-  if (idStr && /^\d+$/.test(idStr)) {
-    const id = parseInt(idStr, 10);
+  const typeIdRaw = getCell(row, 'equipment_type_id', 'type_id');
+  if (typeIdRaw && /^\d+$/.test(typeIdRaw)) {
+    const id = parseInt(typeIdRaw, 10);
     if (types.some((t) => t.id === id)) return { id };
     return { id: null, error: `Unknown equipment_type_id ${id}` };
   }
-  const name = getCell(row, 'equipment_type', 'type', 'equipment_type_name');
-  if (!name) return { id: null, error: 'Missing equipment type (equipment_type_id or equipment_type)' };
-  const lower = name.toLowerCase();
-  const found = types.find((t) => t.name.toLowerCase() === lower);
+  const nameFromTypeCol = getCell(row, 'equipment_type', 'type', 'equipment_type_name');
+  const nameFromIdCol = typeIdRaw && !/^\d+$/.test(typeIdRaw) ? typeIdRaw : '';
+  const raw = nameFromTypeCol || nameFromIdCol;
+  if (!raw) return { id: null, error: 'Missing equipment type (equipment_type_id or equipment_type)' };
+  const cleaned = normalizeEquipmentTypeName(raw);
+  const lower = cleaned.toLowerCase();
+  let found = types.find((t) => t.name.toLowerCase() === lower);
+  if (!found) {
+    found = types.find(
+      (t) =>
+        lower.startsWith(t.name.toLowerCase()) ||
+        t.name.toLowerCase().startsWith(lower) ||
+        raw.toLowerCase().includes(t.name.toLowerCase())
+    );
+  }
   if (found) return { id: found.id };
-  return { id: null, error: `Unknown equipment type "${name}"` };
+  return { id: null, error: `Unknown equipment type "${raw}"` };
 }
 
 export default function EquipmentImportModal({ onClose, onImported }: Props) {
@@ -115,7 +156,7 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
 
   const downloadTemplate = () => {
     const header =
-      'department_id,equipment_type_id,make,model,serial_number,equipment_number,last_calibration_date,next_calibration_due,notes';
+      'department_id,department_name,equipment_type_id,make,model,serial_number,equipment_number,last_calibration_date,next_calibration_due,notes,company_name';
     const blob = new Blob([`${header}\n`], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -223,12 +264,12 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
             </p>
             <ul style={{ margin: '0 0 0.75rem 1.25rem', padding: 0 }}>
               <li>
-                <code>department_id</code> <em>or</em> <code>department</code> — numeric ID from your system, or department name (must match the
-                name shown in Add Equipment, e.g. <code>Commissioning and Qualification</code> or <code>Name (Site)</code>).
+                <code>department_id</code> <em>or</em> <code>department</code> — numeric ID, <strong>or the department name in either column</strong>{' '}
+                (e.g. <code>Commissioning and Qualification</code>). <code>Name (Site)</code> also works.
               </li>
               <li>
-                <code>equipment_type_id</code> <em>or</em> <code>equipment_type</code> — numeric ID or the exact type name (e.g.{' '}
-                <code>Laptop</code>, not the full dropdown label with calibration text).
+                <code>equipment_type_id</code> <em>or</em> <code>equipment_type</code> — numeric ID, exact type name (e.g.{' '}
+                <code>Temperature Logger</code>), or text copied from the app including <code>(Cal every 12 mo)</code> (that part is ignored).
               </li>
               <li>
                 <code>make</code>, <code>model</code>, <code>serial_number</code>
@@ -236,15 +277,16 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
             </ul>
             <p style={{ margin: '0 0 0.5rem' }}>
               <strong>Optional columns:</strong> <code>equipment_number</code>, <code>last_calibration_date</code>,{' '}
-              <code>next_calibration_due</code>, <code>notes</code>
+              <code>next_calibration_due</code>, <code>notes</code>. Exported files also include <code>department_name</code> and{' '}
+              <code>company_name</code> for reference; import uses department ID or name from <code>department_id</code> / <code>department</code>.
             </p>
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Dates: use <code>YYYY-MM-DD</code> or <code>M/D/YYYY</code>. Calibration PDFs are not imported — add those on the equipment detail
-              page after import.
+              Dates: <code>YYYY-MM-DD</code>, <code>M/D/YYYY</code>, or Excel-style <code>17-Dec-2025</code>. Calibration PDFs are not imported — add
+              those on the equipment detail page after import.
             </p>
             {departmentRequired && (
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--accent)' }}>
-                Your account requires a department on every row (use <code>department_id</code> or <code>department</code>).
+                Your account requires a department on every row (numeric ID or name in <code>department_id</code> or <code>department</code>).
               </p>
             )}
             <p style={{ margin: 0 }}>

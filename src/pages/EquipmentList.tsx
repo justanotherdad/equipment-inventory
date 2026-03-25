@@ -4,6 +4,7 @@ import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload,
 import EquipmentModal from '../components/EquipmentModal';
 import EquipmentImportModal from '../components/EquipmentImportModal';
 import BulkEditModal from '../components/BulkEditModal';
+import BulkDeleteModal from '../components/BulkDeleteModal';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { buildCsvRow } from '../utils/csvExport';
@@ -14,6 +15,9 @@ interface Equipment {
   id: number;
   equipment_type_id?: number;
   department_id?: number | null;
+  department_name?: string | null;
+  site_name?: string | null;
+  company_name?: string | null;
   equipment_type_name: string;
   make: string;
   model: string;
@@ -32,10 +36,21 @@ interface SignOutRecord {
   purpose: string | null;
 }
 
-type SortKey = 'equipment_type_name' | 'make' | 'model' | 'serial_number' | 'status' | 'last_calibration_date' | 'next_calibration_due';
+type SortKey =
+  | 'equipment_type_name'
+  | 'department_name'
+  | 'company_name'
+  | 'make'
+  | 'model'
+  | 'serial_number'
+  | 'status'
+  | 'last_calibration_date'
+  | 'next_calibration_due';
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'serial_number', label: 'Serial #' },
   { key: 'equipment_type_name', label: 'Type' },
+  { key: 'department_name', label: 'Department' },
+  { key: 'company_name', label: 'Company' },
   { key: 'make', label: 'Make' },
   { key: 'model', label: 'Model' },
   { key: 'status', label: 'Status' },
@@ -70,6 +85,7 @@ function signOutCoversDay(signOut: SignOutRecord, dayStr: string): boolean {
 export default function EquipmentList() {
   const { profile } = useAuth();
   const canEdit = profile?.role === 'equipment_manager' || profile?.role === 'company_admin' || profile?.role === 'super_admin';
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [activeSignOuts, setActiveSignOuts] = useState<SignOutRecord[]>([]);
   const [signOutsInMonth, setSignOutsInMonth] = useState<SignOutRecord[]>([]);
@@ -80,6 +96,7 @@ export default function EquipmentList() {
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('serial_number');
   const [sortAsc, setSortAsc] = useState(true);
@@ -139,7 +156,9 @@ export default function EquipmentList() {
           !e.model.toLowerCase().includes(q) &&
           !e.serial_number.toLowerCase().includes(q) &&
           !(e.equipment_number?.toLowerCase().includes(q) ?? false) &&
-          !e.equipment_type_name?.toLowerCase().includes(q)
+          !e.equipment_type_name?.toLowerCase().includes(q) &&
+          !(e.department_name?.toLowerCase().includes(q) ?? false) &&
+          !(e.company_name?.toLowerCase().includes(q) ?? false)
         ) {
           return false;
         }
@@ -212,9 +231,16 @@ export default function EquipmentList() {
     load();
   };
 
+  const handleBulkDeleted = () => {
+    setShowBulkDeleteModal(false);
+    setSelectedIds(new Set());
+    load();
+  };
+
   const handleExportCsv = () => {
     const header = buildCsvRow([
       'department_id',
+      'department_name',
       'equipment_type_id',
       'make',
       'model',
@@ -223,10 +249,12 @@ export default function EquipmentList() {
       'last_calibration_date',
       'next_calibration_due',
       'notes',
+      'company_name',
     ]);
     const rows = sorted.map((e) =>
       buildCsvRow([
         e.department_id ?? '',
+        e.department_name ?? '',
         e.equipment_type_id ?? '',
         e.make,
         e.model,
@@ -235,6 +263,7 @@ export default function EquipmentList() {
         e.last_calibration_date ? e.last_calibration_date.slice(0, 10) : '',
         e.next_calibration_due ? e.next_calibration_due.slice(0, 10) : '',
         e.notes ?? '',
+        e.company_name ?? '',
       ])
     );
     const csv = [header, ...rows].join('\n');
@@ -291,10 +320,15 @@ export default function EquipmentList() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {canEdit && selectedIds.size > 0 && (
-            <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
-              <Edit3 size={18} />
-              Edit {selectedIds.size} selected
-            </button>
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
+                <Edit3 size={18} />
+                Edit {selectedIds.size} selected
+              </button>
+              <button type="button" className="btn btn-danger" onClick={() => setShowBulkDeleteModal(true)}>
+                Delete {selectedIds.size} selected
+              </button>
+            </>
           )}
           {canEdit && (
             <button type="button" className="btn btn-secondary" onClick={() => setShowImportModal(true)}>
@@ -386,6 +420,10 @@ export default function EquipmentList() {
                   </th>
                 )}
                 <th className="sortable" onClick={() => handleSort('equipment_type_name')}>Type {sortKey === 'equipment_type_name' && (sortAsc ? '↑' : '↓')}</th>
+                <th className="sortable" onClick={() => handleSort('department_name')}>Department {sortKey === 'department_name' && (sortAsc ? '↑' : '↓')}</th>
+                {isSuperAdmin && (
+                  <th className="sortable" onClick={() => handleSort('company_name')}>Company {sortKey === 'company_name' && (sortAsc ? '↑' : '↓')}</th>
+                )}
                 <th className="sortable" onClick={() => handleSort('make')}>Make {sortKey === 'make' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('model')}>Model {sortKey === 'model' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('serial_number')}>Serial / Equip # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
@@ -408,6 +446,8 @@ export default function EquipmentList() {
                       {e.equipment_type_name}
                     </Link>
                   </td>
+                  <td>{e.department_name ?? '—'}</td>
+                  {isSuperAdmin && <td>{e.company_name ?? '—'}</td>}
                   <td>{e.make}</td>
                   <td>{e.model}</td>
                   <td>{e.equipment_number ? `#${e.equipment_number}` : e.serial_number}</td>
@@ -447,6 +487,16 @@ export default function EquipmentList() {
                   <Link to={`/equipment/${e.id}`} className="link">{e.equipment_type_name}</Link>
                 </span>
               </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Department</span>
+                <span className="mobile-card-value">{e.department_name ?? '—'}</span>
+              </div>
+              {isSuperAdmin && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Company</span>
+                  <span className="mobile-card-value">{e.company_name ?? '—'}</span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Status</span>
                 <span className="mobile-card-value">
@@ -622,6 +672,14 @@ export default function EquipmentList() {
           equipmentIds={Array.from(selectedIds)}
           onClose={() => setShowBulkModal(false)}
           onSaved={handleBulkSaved}
+        />
+      )}
+
+      {showBulkDeleteModal && (
+        <BulkDeleteModal
+          equipmentIds={Array.from(selectedIds)}
+          onClose={() => setShowBulkDeleteModal(false)}
+          onDeleted={handleBulkDeleted}
         />
       )}
     </div>

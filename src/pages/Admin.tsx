@@ -87,6 +87,7 @@ export default function Admin() {
   const [newDeptSiteId, setNewDeptSiteId] = useState('');
   const [newDeptName, setNewDeptName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserDisplayName, setNewUserDisplayName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<Role>('user');
   const [newUserCompanyId, setNewUserCompanyId] = useState<string>('');
@@ -359,9 +360,11 @@ export default function Admin() {
         newUserPassword.trim(),
         newUserAccess,
         newUserRole,
-        isSuperAdmin && newUserCompanyId ? parseInt(newUserCompanyId, 10) : undefined
+        isSuperAdmin && newUserCompanyId ? parseInt(newUserCompanyId, 10) : undefined,
+        newUserDisplayName.trim() || null
       );
       setNewUserEmail('');
+      setNewUserDisplayName('');
       setNewUserPassword('');
       setNewUserAccess([]);
       setCreateUserModal(false);
@@ -585,6 +588,35 @@ export default function Admin() {
                     style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
                   />
                 </div>
+                <div className="admin-address-grid">
+                  <div className="form-group">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      value={companyForm.address_city ?? ''}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_city: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>State</label>
+                    <input
+                      type="text"
+                      value={companyForm.address_state ?? ''}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_state: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>ZIP</label>
+                    <input
+                      type="text"
+                      value={companyForm.address_zip ?? ''}
+                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_zip: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                    />
+                  </div>
+                </div>
                 <div style={{ borderTop: '1px solid var(--border)', marginTop: '1rem', paddingTop: '1rem' }}>
                   <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: 600 }}>Subscription</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -617,35 +649,6 @@ export default function Admin() {
                         Receipts
                       </button>
                     </div>
-                  </div>
-                </div>
-                <div className="admin-address-grid">
-                  <div className="form-group">
-                    <label>City</label>
-                    <input
-                      type="text"
-                      value={companyForm.address_city ?? ''}
-                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_city: e.target.value }))}
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>State</label>
-                    <input
-                      type="text"
-                      value={companyForm.address_state ?? ''}
-                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_state: e.target.value }))}
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>ZIP</label>
-                    <input
-                      type="text"
-                      value={companyForm.address_zip ?? ''}
-                      onChange={(e) => setCompanyForm((f) => ({ ...f, address_zip: e.target.value }))}
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-                    />
                   </div>
                 </div>
                 <button type="button" className="btn btn-primary" onClick={handleSaveCompany}>Save Company</button>
@@ -1277,6 +1280,16 @@ export default function Admin() {
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   placeholder="user@example.com"
                   required
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Name</label>
+                <input
+                  type="text"
+                  value={newUserDisplayName}
+                  onChange={(e) => setNewUserDisplayName(e.target.value)}
+                  placeholder="Display name"
                   style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
                 />
               </div>

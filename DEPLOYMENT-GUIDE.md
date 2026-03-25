@@ -22,7 +22,7 @@ Add to `.env` for payment processing:
 cd "/Users/davefletes/Library/Mobile Documents/com~apple~CloudDocs/Buisness/DJ2/Applications/INVENTORY MANAGEMENT/Equipment Inventory"
 
 git add .
-git commit -m "Make/Model combobox and editable calibration dates"
+git commit -m "added import"
 git push origin main
 ```
 

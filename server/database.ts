@@ -15,6 +15,7 @@ export interface Equipment {
   department_id?: number | null;
   department_name?: string | null;
   site_name?: string | null;
+  company_name?: string | null;
   make: string;
   model: string;
   serial_number: string;
@@ -620,7 +621,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name),
-        departments(name, sites(name))
+        departments(name, sites(name, companies(name)))
       `)
       .order('make')
       .order('model');
@@ -656,12 +657,17 @@ export class Database {
     const { data, error } = await q;
     if (error) throw error;
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const dept = r.departments as { name?: string; sites?: { name: string } } | null;
+      const dept = r.departments as {
+        name?: string;
+        sites?: { name: string; companies?: { name: string } | null } | null;
+      } | null;
+      const companyName = dept?.sites?.companies?.name ?? null;
       return {
         ...r,
         equipment_type_name: (r.equipment_types as { name: string })?.name,
         department_name: dept?.name ?? null,
         site_name: dept?.sites?.name ?? null,
+        company_name: companyName,
         equipment_types: undefined,
         departments: undefined,
       };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Package } from 'lucide-react';
 
 interface Site {
@@ -72,14 +72,32 @@ function toAccessRows(state: AccessState, sites: Site[], departments: Department
 
 export default function AccessCheckboxes({ sites, departments, equipment, access, onSave, disabled }: Props) {
   const [state, setState] = useState<AccessState>(() => toAccessState(access));
-  const [saving, setSaving] = useState(false);
+
+  const sortedDepartments = useMemo(() => {
+    return [...departments].sort((a, b) => {
+      const sa = sites.find((s) => s.id === a.site_id)?.name ?? '';
+      const sb = sites.find((s) => s.id === b.site_id)?.name ?? '';
+      const c = sa.localeCompare(sb);
+      return c !== 0 ? c : a.name.localeCompare(b.name);
+    });
+  }, [departments, sites]);
 
   useEffect(() => {
     setState(toAccessState(access));
   }, [access]);
 
-  const visibleDepts = departments.filter((d) => state.siteIds.has(d.site_id) || state.departmentIds.has(d.id));
-  const visibleEquip = equipment.filter((e) => e.department_id && (state.departmentIds.has(e.department_id) || state.equipmentIds.has(e.id)));
+  const visibleEquip = useMemo(() => {
+    return equipment.filter((e) => {
+      if (!e.department_id) return false;
+      const d = departments.find((x) => x.id === e.department_id);
+      if (!d) return false;
+      return (
+        state.equipmentIds.has(e.id) ||
+        state.departmentIds.has(e.department_id) ||
+        state.siteIds.has(d.site_id)
+      );
+    });
+  }, [equipment, departments, state]);
 
   const toggleSite = (siteId: number, checked: boolean) => {
     const siteIds = new Set(state.siteIds);
@@ -88,15 +106,15 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
     if (checked) {
       siteIds.add(siteId);
       departments.filter((d) => d.site_id === siteId).forEach((d) => departmentIds.delete(d.id));
-      equipment.filter((e) => e.department_id && departments.find((d) => d.id === e.department_id)?.site_id === siteId).forEach((e) => equipmentIds.delete(e.id));
+      equipment
+        .filter((e) => e.department_id && departments.find((d) => d.id === e.department_id)?.site_id === siteId)
+        .forEach((e) => equipmentIds.delete(e.id));
     } else {
       siteIds.delete(siteId);
     }
     const next = { siteIds, departmentIds, equipmentIds };
     setState(next);
-    setSaving(true);
     onSave(toAccessRows(next, sites, departments, equipment));
-    setSaving(false);
   };
 
   const toggleAllSites = (checked: boolean) => {
@@ -111,10 +129,23 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
   const toggleDepartment = (deptId: number, checked: boolean) => {
     const dept = departments.find((d) => d.id === deptId);
     if (!dept) return;
+    if (state.siteIds.has(dept.site_id) && checked) return;
     const siteIds = new Set(state.siteIds);
     const departmentIds = new Set(state.departmentIds);
     const equipmentIds = new Set(state.equipmentIds);
-    if (checked) {
+
+    if (state.siteIds.has(dept.site_id)) {
+      const siteDepts = departments.filter((d) => d.site_id === dept.site_id);
+      siteIds.delete(dept.site_id);
+      if (!checked) {
+        siteDepts.forEach((d) => {
+          if (d.id !== deptId) departmentIds.add(d.id);
+        });
+        equipment
+          .filter((e) => e.department_id && siteDepts.some((sd) => sd.id === e.department_id))
+          .forEach((e) => equipmentIds.delete(e.id));
+      }
+    } else if (checked) {
       siteIds.delete(dept.site_id);
       departmentIds.add(deptId);
       equipment.filter((e) => e.department_id === deptId).forEach((e) => equipmentIds.delete(e.id));
@@ -131,13 +162,13 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
     const departmentIds = new Set(state.departmentIds);
     const equipmentIds = new Set(state.equipmentIds);
     if (checked) {
-      visibleDepts.forEach((d) => {
+      sortedDepartments.forEach((d) => {
         siteIds.delete(d.site_id);
         departmentIds.add(d.id);
       });
-      visibleDepts.flatMap((d) => equipment.filter((e) => e.department_id === d.id)).forEach((e) => equipmentIds.delete(e.id));
+      sortedDepartments.flatMap((d) => equipment.filter((e) => e.department_id === d.id)).forEach((e) => equipmentIds.delete(e.id));
     } else {
-      visibleDepts.forEach((d) => departmentIds.delete(d.id));
+      sortedDepartments.forEach((d) => departmentIds.delete(d.id));
     }
     const next = { siteIds, departmentIds, equipmentIds };
     setState(next);
@@ -188,25 +219,19 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
   };
 
   const allSitesChecked = sites.length > 0 && sites.every((s) => state.siteIds.has(s.id));
-  const allDeptsChecked = visibleDepts.length > 0 && visibleDepts.every((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id));
-  const allEquipChecked = visibleEquip.length > 0 && visibleEquip.every((e) => state.equipmentIds.has(e.id) || state.departmentIds.has(e.department_id!) || state.siteIds.has(departments.find((d) => d.id === e.department_id)?.site_id ?? 0));
-
-  const hasDeptAccess = (deptId: number) => {
-    const d = departments.find((x) => x.id === deptId);
-    return d && (state.siteIds.has(d.site_id) || state.departmentIds.has(deptId));
-  };
+  const allDeptsExplicitOrSite =
+    sortedDepartments.length > 0 &&
+    sortedDepartments.every((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id));
   const hasEquipAccess = (eq: Equipment) => {
     if (!eq.department_id) return false;
     const d = departments.find((x) => x.id === eq.department_id);
     return d && (state.siteIds.has(d.site_id) || state.departmentIds.has(eq.department_id) || state.equipmentIds.has(eq.id));
   };
-
   const isEquipInherited = (eq: Equipment) => {
     if (!eq.department_id) return false;
     const d = departments.find((x) => x.id === eq.department_id);
     return d && (state.siteIds.has(d.site_id) || state.departmentIds.has(eq.department_id));
   };
-
   const isDeptInherited = (deptId: number) => {
     const d = departments.find((x) => x.id === deptId);
     return d && state.siteIds.has(d.site_id);
@@ -223,7 +248,9 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
             <input
               type="checkbox"
               checked={allSitesChecked}
-              ref={(el) => { if (el) el.indeterminate = sites.length > 0 && !allSitesChecked && sites.some((s) => state.siteIds.has(s.id)); }}
+              ref={(el) => {
+                if (el) el.indeterminate = sites.length > 0 && !allSitesChecked && sites.some((s) => state.siteIds.has(s.id));
+              }}
               onChange={(e) => toggleAllSites(e.target.checked)}
               disabled={disabled}
             />
@@ -247,31 +274,40 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
         </div>
       </div>
 
-      {visibleDepts.length > 0 && (
+      {sortedDepartments.length > 0 && (
         <div>
           <label style={{ ...rowStyle, marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>
             <span style={checkboxCol}>
               <input
                 type="checkbox"
-                checked={visibleDepts.every((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id))}
+                checked={allDeptsExplicitOrSite}
+                ref={(el) => {
+                  if (el) {
+                    const some = sortedDepartments.some((d) => state.departmentIds.has(d.id) || state.siteIds.has(d.site_id));
+                    el.indeterminate = sortedDepartments.length > 0 && !allDeptsExplicitOrSite && some;
+                  }
+                }}
                 onChange={(e) => toggleAllDepartments(e.target.checked)}
-                disabled={disabled || (visibleDepts.length > 0 && visibleDepts.every((d) => isDeptInherited(d.id)))}
+                disabled={disabled}
               />
             </span>
             Departments
           </label>
           <div style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            {visibleDepts.map((d) => (
-              <label key={d.id} style={{ ...rowStyle, cursor: disabled || isDeptInherited(d.id) ? 'default' : 'pointer' }}>
+            {sortedDepartments.map((d) => (
+              <label key={d.id} style={{ ...rowStyle, cursor: disabled ? 'default' : 'pointer' }}>
                 <span style={checkboxCol}>
                   <input
                     type="checkbox"
                     checked={state.siteIds.has(d.site_id) || state.departmentIds.has(d.id)}
                     onChange={(e) => toggleDepartment(d.id, e.target.checked)}
-                    disabled={disabled || isDeptInherited(d.id)}
+                    disabled={disabled}
                   />
                 </span>
                 {d.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>({sites.find((s) => s.id === d.site_id)?.name})</span>
+                {isDeptInherited(d.id) && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.25rem' }}>via site</span>
+                )}
               </label>
             ))}
           </div>
@@ -285,6 +321,13 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
               <input
                 type="checkbox"
                 checked={visibleEquip.every((e) => hasEquipAccess(e))}
+                ref={(el) => {
+                  if (el) {
+                    const some = visibleEquip.some((e) => hasEquipAccess(e));
+                    el.indeterminate =
+                      visibleEquip.length > 0 && !visibleEquip.every((e) => hasEquipAccess(e)) && some;
+                  }
+                }}
                 onChange={(e) => toggleAllEquipment(e.target.checked)}
                 disabled={disabled || (visibleEquip.length > 0 && visibleEquip.every((e) => isEquipInherited(e)))}
               />
@@ -309,8 +352,6 @@ export default function AccessCheckboxes({ sites, departments, equipment, access
           </div>
         </div>
       )}
-
-      {saving && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Saving…</span>}
     </div>
   );
 }

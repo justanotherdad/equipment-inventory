@@ -61,8 +61,18 @@ export const api = {
     updateDepartment: (id: number, data: { name: string; site_id: number }) =>
       request(`/api/admin/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteDepartment: (id: number) => request(`/api/admin/departments/${id}`, { method: 'DELETE' }),
-    createUser: (email: string, password: string, access?: { site_id: number; department_id?: number | null; equipment_id?: number | null }[], role?: string, companyId?: number) =>
-      request('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, access: access ?? [], role, company_id: companyId }) }),
+    createUser: (
+      email: string,
+      password: string,
+      access?: { site_id: number; department_id?: number | null; equipment_id?: number | null }[],
+      role?: string,
+      companyId?: number,
+      displayName?: string | null
+    ) =>
+      request('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, access: access ?? [], role, company_id: companyId, display_name: displayName ?? undefined }),
+      }),
     getCompanies: () => request<{ id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[]>('/api/admin/companies'),
     getCompany: (id: number) => request<{ id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }>(`/api/admin/companies/${id}`),
     getOnboardingStatus: () => request<{ needsOnboarding: boolean }>('/api/admin/onboarding-status'),
