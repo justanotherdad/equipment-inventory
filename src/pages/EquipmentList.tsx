@@ -239,8 +239,9 @@ export default function EquipmentList() {
 
   const handleExportCsv = () => {
     const header = buildCsvRow([
+      'department',
       'department_id',
-      'department_name',
+      'equipment_type',
       'equipment_type_id',
       'make',
       'model',
@@ -253,8 +254,9 @@ export default function EquipmentList() {
     ]);
     const rows = sorted.map((e) =>
       buildCsvRow([
-        e.department_id ?? '',
         e.department_name ?? '',
+        e.department_id ?? '',
+        e.equipment_type_name ?? '',
         e.equipment_type_id ?? '',
         e.make,
         e.model,

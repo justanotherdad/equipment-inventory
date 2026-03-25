@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { format, addMonths } from 'date-fns';
 import { Upload } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
@@ -92,7 +93,7 @@ function resolveDepartmentId(
     if (departments.some((d) => d.id === id)) return { id };
     return { id: null, error: `Unknown department_id ${id}` };
   }
-  const nameFromDeptCol = getCell(row, 'department', 'dept');
+  const nameFromDeptCol = getCell(row, 'department', 'department_name', 'dept');
   const nameFromIdCol = deptIdRaw && !/^\d+$/.test(deptIdRaw) ? deptIdRaw : '';
   const name = nameFromDeptCol || nameFromIdCol;
   if (!name) return { id: null };
@@ -156,7 +157,7 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
 
   const downloadTemplate = () => {
     const header =
-      'department_id,department_name,equipment_type_id,make,model,serial_number,equipment_number,last_calibration_date,next_calibration_due,notes,company_name';
+      'department,equipment_type,make,model,serial_number,equipment_number,last_calibration_date,next_calibration_due,notes';
     const blob = new Blob([`${header}\n`], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -189,7 +190,7 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
         continue;
       }
       if (departmentRequired && dept.id == null) {
-        log.push(`Row ${lineNum}: department_id or department is required`);
+        log.push(`Row ${lineNum}: department is required (use the department name, or optional department_id for numeric ID)`);
         continue;
       }
       const et = resolveEquipmentTypeId(row, types);
@@ -207,10 +208,16 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
       const equipmentNumber = getCell(row, 'equipment_number', 'equip_number') || null;
       const lastCalRaw = getCell(row, 'last_calibration_date', 'last_cal');
       const nextDueRaw = getCell(row, 'next_calibration_due', 'next_cal_due', 'next_calibration');
-      const lastCal = normalizeDate(lastCalRaw);
-      const nextDue = normalizeDate(nextDueRaw);
+      let lastCal = normalizeDate(lastCalRaw);
+      let nextDue = normalizeDate(nextDueRaw);
       if (lastCalRaw && !lastCal) log.push(`Row ${lineNum}: warning — could not parse last_calibration_date "${lastCalRaw}"`);
       if (nextDueRaw && !nextDue) log.push(`Row ${lineNum}: warning — could not parse next_calibration_due "${nextDueRaw}"`);
+      const typeMeta = types.find((t) => t.id === et.id);
+      const needsCal = typeMeta?.requires_calibration === 1;
+      const calMonths = typeMeta?.calibration_frequency_months;
+      if (needsCal && calMonths && lastCal && !nextDue) {
+        nextDue = format(addMonths(new Date(lastCal + 'T12:00:00'), calMonths), 'yyyy-MM-dd');
+      }
       const notes = getCell(row, 'notes', 'note') || null;
 
       try {
@@ -260,16 +267,16 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
               <strong>File format:</strong> The first row must be a header with column names. Each following row is one piece of equipment.
             </p>
             <p style={{ margin: '0 0 0.5rem' }}>
-              <strong>Required columns</strong> (use these names, or the alternates in parentheses):
+              <strong>Required columns</strong> (template uses the names below):
             </p>
             <ul style={{ margin: '0 0 0.75rem 1.25rem', padding: 0 }}>
               <li>
-                <code>department_id</code> <em>or</em> <code>department</code> — numeric ID, <strong>or the department name in either column</strong>{' '}
-                (e.g. <code>Commissioning and Qualification</code>). <code>Name (Site)</code> also works.
+                <code>department</code> — department name (e.g. <code>Commissioning and Qualification</code>). Optional: <code>department_id</code> for
+                numeric ID; <code>department_name</code> is accepted as another column name for the same value.
               </li>
               <li>
-                <code>equipment_type_id</code> <em>or</em> <code>equipment_type</code> — numeric ID, exact type name (e.g.{' '}
-                <code>Temperature Logger</code>), or text copied from the app including <code>(Cal every 12 mo)</code> (that part is ignored).
+                <code>equipment_type</code> — type name (e.g. <code>Temperature Logger</code>) or text from the app with <code>(Cal every 12 mo)</code>{' '}
+                (suffix ignored). Optional: <code>equipment_type_id</code> for numeric ID.
               </li>
               <li>
                 <code>make</code>, <code>model</code>, <code>serial_number</code>
@@ -277,16 +284,17 @@ export default function EquipmentImportModal({ onClose, onImported }: Props) {
             </ul>
             <p style={{ margin: '0 0 0.5rem' }}>
               <strong>Optional columns:</strong> <code>equipment_number</code>, <code>last_calibration_date</code>,{' '}
-              <code>next_calibration_due</code>, <code>notes</code>. Exported files also include <code>department_name</code> and{' '}
-              <code>company_name</code> for reference; import uses department ID or name from <code>department_id</code> / <code>department</code>.
+              <code>next_calibration_due</code>, <code>notes</code>. Exports may include extra columns (<code>department_id</code>,{' '}
+              <code>company_name</code>, etc.); those are optional on re-import.
             </p>
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Dates: <code>YYYY-MM-DD</code>, <code>M/D/YYYY</code>, or Excel-style <code>17-Dec-2025</code>. Calibration PDFs are not imported — add
-              those on the equipment detail page after import.
+              Dates: <code>YYYY-MM-DD</code>, <code>M/D/YYYY</code>, or Excel-style <code>17-Dec-2025</code>. If the type requires calibration and you set{' '}
+              <code>last_calibration_date</code> but leave <code>next_calibration_due</code> blank, the due date is calculated from the type’s calibration
+              interval (same as Add Equipment). Calibration PDFs are not imported — add those on the equipment detail page after import.
             </p>
             {departmentRequired && (
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--accent)' }}>
-                Your account requires a department on every row (numeric ID or name in <code>department_id</code> or <code>department</code>).
+                Your account requires a <code>department</code> (name) on every row, or a numeric <code>department_id</code>.
               </p>
             )}
             <p style={{ margin: 0 }}>

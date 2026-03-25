@@ -233,7 +233,7 @@ export default function EquipmentDetail() {
             <ArrowLeft size={18} /> Back to Equipment
           </Link>
           <h2>{equipment.make} {equipment.model}</h2>
-          <p>{equipment.equipment_type_name} • {equipment.equipment_number ? `#${equipment.equipment_number}` : `S/N: ${equipment.serial_number}`}</p>
+          <p>{equipment.equipment_number ? `#${equipment.equipment_number}` : `S/N: ${equipment.serial_number}`}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => setShowEdit(true)}>
@@ -248,6 +248,10 @@ export default function EquipmentDetail() {
       <div className="card">
         <h3 className="card-title">Details</h3>
         <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Type</div>
+            <div>{equipment.equipment_type_name}</div>
+          </div>
           {(equipment.site_name || equipment.department_name) && (
             <>
               {equipment.site_name && (
