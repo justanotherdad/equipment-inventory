@@ -22,7 +22,7 @@ Add to `.env` for payment processing:
 cd "/Users/davefletes/Library/Mobile Documents/com~apple~CloudDocs/Buisness/DJ2/Applications/INVENTORY MANAGEMENT/Equipment Inventory"
 
 git add .
-git commit -m "added import"
+git commit -m "fixes"
 git push origin main
 ```
 
