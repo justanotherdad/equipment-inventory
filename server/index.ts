@@ -47,6 +47,11 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 
+/** No auth — for hosting load balancers / probes. */
+app.get('/health', (_req, res) => {
+  res.status(200).type('text').send('ok');
+});
+
 // Auth: get or create profile (requires valid JWT)
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
@@ -970,7 +975,11 @@ if (fs.existsSync(distPath)) {
 }
 
 const HOST = process.env.HOST ?? '0.0.0.0';
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`Equipment Inventory server listening on http://${HOST}:${PORT}`);
   console.log(`Using Supabase for database and storage`);
+});
+server.on('error', (err: NodeJS.ErrnoException) => {
+  console.error('Server listen error:', err.message);
+  process.exit(1);
 });
