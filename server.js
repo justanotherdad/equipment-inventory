@@ -1,7 +1,6 @@
 /**
- * Single-process entry for PaaS hosts (e.g. Hostinger "Entry file: server.js").
- * Avoids spawning a child Node process — some platforms only proxy to PID 1.
+ * Production entry (e.g. Hostinger "Entry file: server.js").
+ * Loads the pre-bundled server from dist-server/ — no tsx at runtime.
+ * Run `npm run build` first so `dist-server/index.js` exists.
  */
-import { tsImport } from 'tsx/esm/api';
-
-await tsImport('./server/index.ts', import.meta.url);
+import './dist-server/index.js';
