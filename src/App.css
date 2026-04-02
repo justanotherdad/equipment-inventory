@@ -43,21 +43,20 @@ html, body {
   justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid var(--sidebar-border);
-  min-height: 3.25rem;
+  min-height: 3.75rem;
+}
+
+.sidebar-header-brand {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .sidebar-header .sidebar-brand-logo {
-  flex-shrink: 0;
-  min-height: 48px;
-}
-
-.sidebar-header h1 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  flex: 1;
-  min-width: 0;
-  color: var(--sidebar-text);
+  flex-shrink: 1;
+  min-height: 52px;
+  max-width: 100%;
 }
 
 .sidebar-header svg {

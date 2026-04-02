@@ -88,10 +88,11 @@ function ProtectedLayout() {
 
   return (
     <div className="app-layout">
-        <aside className="sidebar">
+        <aside className="sidebar" aria-label="EquipForge">
           <div className="sidebar-header">
-            <BrandLogo height={48} maxWidth={280} className="sidebar-brand-logo" />
-            <h1>EquipForge</h1>
+            <div className="sidebar-header-brand">
+              <BrandLogo height={56} maxWidth={220} className="sidebar-brand-logo" />
+            </div>
             <button
               type="button"
               className="sidebar-toggle"
