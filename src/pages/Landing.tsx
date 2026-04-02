@@ -7,8 +7,7 @@ export default function Landing() {
     <div className="landing-page">
       <div className="landing-content">
         <div className="landing-header">
-          <BrandLogo height={48} accentFallback />
-          <h1>EquipForge</h1>
+          <BrandLogo variant="landing" accentFallback />
           <p className="landing-tagline">
             Track equipment, calibrations, sign-outs, and usage in one place.
           </p>

@@ -91,7 +91,7 @@ function ProtectedLayout() {
         <aside className="sidebar" aria-label="EquipForge">
           <div className="sidebar-header">
             <div className="sidebar-header-brand">
-              <BrandLogo height={56} maxWidth={220} className="sidebar-brand-logo" />
+              <BrandLogo variant="sidebar" className="sidebar-brand-logo" />
             </div>
             <button
               type="button"
