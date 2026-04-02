@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Package } from 'lucide-react';
 
-type LogoStage = 'svg' | 'png' | 'fail';
+/** Try in order; Linux hosts are case-sensitive (Logo.png vs logo.png). */
+const LOGO_SRCS = ['/logo.svg', '/logo.png', '/Logo.png'];
 
 /**
- * Loads branding from `public/logo.svg` or `public/logo.png`.
- * Add one of those files (transparent background recommended). If neither exists, shows the Package icon.
+ * Loads branding from `public/` (copied to site root). Preferred: `logo.svg` or `logo.png`.
+ * If neither exists, shows the Package icon.
  */
 export function BrandLogo({
   height,
@@ -17,9 +18,9 @@ export function BrandLogo({
   /** When using the icon fallback, use accent color (e.g. landing hero). */
   accentFallback?: boolean;
 }) {
-  const [stage, setStage] = useState<LogoStage>('svg');
+  const [srcIndex, setSrcIndex] = useState(0);
 
-  if (stage === 'fail') {
+  if (srcIndex >= LOGO_SRCS.length) {
     return (
       <Package
         size={height}
@@ -29,7 +30,7 @@ export function BrandLogo({
     );
   }
 
-  const src = stage === 'svg' ? '/logo.svg' : '/logo.png';
+  const src = LOGO_SRCS[srcIndex];
 
   return (
     <img
@@ -44,7 +45,7 @@ export function BrandLogo({
         objectFit: 'contain',
         display: 'block',
       }}
-      onError={() => setStage((s) => (s === 'svg' ? 'png' : 'fail'))}
+      onError={() => setSrcIndex((i) => i + 1)}
     />
   );
 }
