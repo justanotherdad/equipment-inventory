@@ -10,10 +10,13 @@ const LOGO_SRCS = ['/logo.svg', '/logo.png', '/Logo.png'];
  */
 export function BrandLogo({
   height,
+  maxWidth: maxWidthProp,
   className,
   accentFallback,
 }: {
   height: number;
+  /** Max width in px (wide horizontal logos). Default scales with height. */
+  maxWidth?: number;
   className?: string;
   /** When using the icon fallback, use accent color (e.g. landing hero). */
   accentFallback?: boolean;
@@ -31,6 +34,7 @@ export function BrandLogo({
   }
 
   const src = LOGO_SRCS[srcIndex];
+  const maxWidth = maxWidthProp ?? Math.min(height * 6, 280);
 
   return (
     <img
@@ -41,8 +45,10 @@ export function BrandLogo({
       style={{
         height,
         width: 'auto',
-        maxWidth: `${Math.min(height * 6, 280)}px`,
+        maxWidth: `${maxWidth}px`,
+        maxHeight: `${height}px`,
         objectFit: 'contain',
+        objectPosition: 'left center',
         display: 'block',
       }}
       onError={() => setSrcIndex((i) => i + 1)}

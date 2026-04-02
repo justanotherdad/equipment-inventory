@@ -34,6 +34,24 @@ const squareClient = squareAccessToken && squareLocationId
     })
   : null;
 
+/** Apex hostname (no www). Set CANONICAL_HOST in env if your live domain differs from default. */
+const CANONICAL_HOST = (process.env.CANONICAL_HOST || 'equipforge.com').toLowerCase().replace(/^www\./, '');
+
+// Behind LiteSpeed/nginx: trust X-Forwarded-* for HTTPS detection
+app.set('trust proxy', 1);
+
+// www → apex (301). Runs before SSL is irrelevant in the browser once TLS terminates; same host must reach Node.
+app.use((req, res, next) => {
+  const host = req.get('host')?.split(':')[0]?.toLowerCase();
+  if (host === `www.${CANONICAL_HOST}`) {
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const safeProto = proto === 'http' || proto === 'https' ? proto : 'https';
+    const url = `${safeProto}://${CANONICAL_HOST}${req.originalUrl}`;
+    return res.redirect(301, url);
+  }
+  next();
+});
+
 // Multer for PDF uploads (memory storage - we'll upload to Supabase)
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -90,7 +90,7 @@ function ProtectedLayout() {
     <div className="app-layout">
         <aside className="sidebar">
           <div className="sidebar-header">
-            <BrandLogo height={28} />
+            <BrandLogo height={48} maxWidth={280} className="sidebar-brand-logo" />
             <h1>EquipForge</h1>
             <button
               type="button"
