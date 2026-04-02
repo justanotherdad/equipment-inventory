@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { api } from './api';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import './App.css';
 import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key, FlaskConical } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { api } from './api';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import { BrandLogo } from './components/BrandLogo';
@@ -37,10 +37,12 @@ const navItems = [
 ];
 
 function ProtectedLayout() {
+  const location = useLocation();
   const { profile, loading, signOut, refreshProfile } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<{ needsOnboarding: boolean } | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [notifBadge, setNotifBadge] = useState(0);
 
   useEffect(() => {
     if (profile?.role === 'company_admin') {
@@ -51,6 +53,17 @@ function ProtectedLayout() {
       setOnboardingStatus(null);
     }
   }, [profile?.role]);
+
+  useEffect(() => {
+    if (!profile || profile.role === 'user') {
+      setNotifBadge(0);
+      return;
+    }
+    const load = () => api.notifications.unreadCount().then((r) => setNotifBadge(r.count)).catch(() => setNotifBadge(0));
+    load();
+    const t = setInterval(load, 120000);
+    return () => clearInterval(t);
+  }, [profile, location.pathname]);
 
   if (loading) {
     return (
@@ -110,7 +123,26 @@ function ProtectedLayout() {
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
               >
                 <Icon size={20} />
-                <span>{label}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  {label}
+                  {to === '/requests' && notifBadge > 0 && (
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        background: 'var(--danger)',
+                        color: '#fff',
+                        borderRadius: 999,
+                        padding: '0.1rem 0.4rem',
+                        minWidth: '1.1rem',
+                        textAlign: 'center',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {notifBadge > 99 ? '99+' : notifBadge}
+                    </span>
+                  )}
+                </span>
               </NavLink>
             ))}
             <button

@@ -319,9 +319,61 @@ app.post('/api/checkouts', async (req, res) => {
   }
 });
 
+app.put('/api/sign-outs/:id', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const role = req.profile.role;
+    if (role !== 'super_admin' && role !== 'company_admin' && role !== 'equipment_manager') {
+      return res.status(403).json({ error: 'Equipment manager access required' });
+    }
+    const { signed_out_at, date_from, date_to } = req.body as {
+      signed_out_at?: string;
+      date_from?: string | null;
+      date_to?: string | null;
+    };
+    await db.updateSignOut(parseInt(req.params.id, 10), { signed_out_at, date_from, date_to }, req.profile);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.post('/api/sign-outs/:id/check-in', async (req, res) => {
   try {
     await db.checkInSignOut(parseInt(req.params.id, 10), req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const unreadOnly = req.query.unread === '1' || req.query.unread === 'true';
+    const data = await db.getNotifications(req.profile.id, unreadOnly);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/notifications/unread-count', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const count = await db.getUnreadNotificationCount(req.profile.id);
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/notifications/mark-read', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const { ids, all } = req.body as { ids?: number[]; all?: boolean };
+    if (all) await db.markAllNotificationsRead(req.profile.id);
+    else if (Array.isArray(ids)) await db.markNotificationsRead(req.profile.id, ids);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -503,7 +555,7 @@ app.post('/api/calibration-records/download-batch', async (req, res) => {
 // Equipment Requests
 app.get('/api/equipment-requests', async (req, res) => {
   try {
-    const status = req.query.status as 'pending' | 'approved' | 'rejected' | undefined;
+    const status = req.query.status as 'pending' | 'approved' | 'rejected' | 'fulfilled' | undefined;
     const data = await db.getEquipmentRequests(status, req.profile);
     res.json(data);
   } catch (err) {
@@ -513,13 +565,18 @@ app.get('/api/equipment-requests', async (req, res) => {
 
 app.post('/api/equipment-requests', async (req, res) => {
   try {
-    const body = req.body;
-    if (Array.isArray(body.equipment_ids)) {
-      await db.createEquipmentRequestsBatch(body);
+    const body = req.body as Record<string, unknown>;
+    if (Array.isArray(body.lines) && body.lines.length > 0) {
+      if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+      const id = await db.createEquipmentRequestWithLines(body as never);
+      res.status(201).json({ ok: true, id });
+    } else if (Array.isArray(body.equipment_ids)) {
+      await db.createEquipmentRequestsBatch(body as never);
+      res.status(201).json({ ok: true });
     } else {
-      await db.createEquipmentRequest(body);
+      await db.createEquipmentRequest(body as never);
+      res.status(201).json({ ok: true });
     }
-    res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
   }
@@ -530,6 +587,9 @@ app.post('/api/equipment-requests/:id/approve', async (req, res) => {
     const { reviewed_by } = req.body;
     if (!reviewed_by?.trim()) return res.status(400).json({ error: 'reviewed_by is required' });
     const reqData = await db.approveEquipmentRequest(parseInt(req.params.id, 10), reviewed_by.trim());
+    if (!reqData.legacy) {
+      return res.json({ ok: true });
+    }
     const purposeParts = [`Building: ${reqData.building}`];
     if (reqData.room_number) purposeParts.push(`Room: ${reqData.room_number}`);
     purposeParts.push(`Equipment to test: #${reqData.equipment_number_to_test}`, `Dates: ${reqData.date_from} to ${reqData.date_to}`);
@@ -548,6 +608,25 @@ app.post('/api/equipment-requests/:id/approve', async (req, res) => {
       sign_out_id: signOutId,
       system_equipment: reqData.equipment_number_to_test,
     });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.post('/api/equipment-requests/:id/fulfill', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const role = req.profile.role;
+    if (role !== 'super_admin' && role !== 'company_admin' && role !== 'equipment_manager') {
+      return res.status(403).json({ error: 'Approver or equipment manager access required' });
+    }
+    const { reviewed_by, fulfillments } = req.body as { reviewed_by?: string; fulfillments?: { line_id: number; equipment_id: number }[] };
+    if (!reviewed_by?.trim()) return res.status(400).json({ error: 'reviewed_by is required' });
+    if (!Array.isArray(fulfillments) || fulfillments.length === 0) {
+      return res.status(400).json({ error: 'fulfillments array required' });
+    }
+    await db.fulfillEquipmentRequest(req.profile, parseInt(req.params.id, 10), reviewed_by.trim(), fulfillments);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

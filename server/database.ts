@@ -38,6 +38,10 @@ export interface SignOut {
   signed_in_at: string | null;
   purpose: string | null;
   created_at: string;
+  date_from?: string | null;
+  date_to?: string | null;
+  equipment_request_id?: number | null;
+  equipment_request_line_id?: number | null;
 }
 
 export interface Usage {
@@ -57,9 +61,24 @@ export interface CalibrationRecord {
   due_date?: string | null;
 }
 
+export interface EquipmentRequestLine {
+  id: number;
+  equipment_request_id: number;
+  equipment_type_id: number;
+  equipment_type_name?: string | null;
+  quantity: number;
+  fulfilled_quantity?: number;
+  preferred_equipment_id: number | null;
+  preferred_make?: string | null;
+  preferred_model?: string | null;
+  preferred_serial?: string | null;
+  preferred_equipment_number?: string | null;
+  sort_order: number;
+}
+
 export interface EquipmentRequest {
   id: number;
-  equipment_id: number;
+  equipment_id: number | null;
   equipment_make?: string;
   equipment_model?: string;
   equipment_serial?: string;
@@ -72,10 +91,25 @@ export interface EquipmentRequest {
   equipment_number_to_test: string;
   date_from: string;
   date_to: string;
-  status: 'pending' | 'approved' | 'rejected';
+  site_id?: number | null;
+  department_id?: number | null;
+  status: 'pending' | 'approved' | 'rejected' | 'fulfilled';
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_comment: string | null;
+  fulfilled_at?: string | null;
+  created_at: string;
+  lines?: EquipmentRequestLine[];
+}
+
+export interface AppNotification {
+  id: number;
+  profile_id: number;
+  kind: string;
+  equipment_request_id: number | null;
+  title: string;
+  body: string | null;
+  read_at: string | null;
   created_at: string;
 }
 
@@ -1009,19 +1043,22 @@ export class Database {
     signed_out_by: string;
     purpose?: string;
     equipment_request_id?: number;
+    equipment_request_line_id?: number;
     building?: string;
     equipment_number_to_test?: string;
     date_from?: string;
     date_to?: string;
+    signed_out_at?: string;
     checkout_id?: number;
     room_number?: string;
   }): Promise<number> {
     const payload: Record<string, unknown> = {
       equipment_id: data.equipment_id,
       signed_out_by: data.signed_out_by,
-      signed_out_at: new Date().toISOString(),
+      signed_out_at: data.signed_out_at ?? new Date().toISOString(),
       purpose: data.purpose ?? null,
       equipment_request_id: data.equipment_request_id ?? null,
+      equipment_request_line_id: data.equipment_request_line_id ?? null,
       building: data.building ?? null,
       equipment_number_to_test: data.equipment_number_to_test ?? null,
       date_from: data.date_from ?? null,
@@ -1222,27 +1259,74 @@ export class Database {
   }
 
   // Equipment Requests
-  async getEquipmentRequests(status?: 'pending' | 'approved' | 'rejected', profile?: Profile): Promise<EquipmentRequest[]> {
+  private mapEquipmentRequestRow(r: Record<string, unknown>): EquipmentRequest & { _department_id?: number | null } {
+    const eq = (r.equipment || {}) as {
+      make?: string;
+      model?: string;
+      serial_number?: string;
+      equipment_number?: string;
+      department_id?: number | null;
+    };
+    const rawLines = (r.equipment_request_lines ?? []) as Record<string, unknown>[];
+    const lines: EquipmentRequestLine[] = rawLines.map((ln, idx) => {
+      const et = (ln.equipment_types || {}) as { name?: string };
+      return {
+        id: ln.id as number,
+        equipment_request_id: ln.equipment_request_id as number,
+        equipment_type_id: ln.equipment_type_id as number,
+        equipment_type_name: et.name ?? null,
+        quantity: ln.quantity as number,
+        preferred_equipment_id: (ln.preferred_equipment_id as number | null) ?? null,
+        preferred_make: null as string | null,
+        preferred_model: null as string | null,
+        preferred_serial: null as string | null,
+        preferred_equipment_number: null as string | null,
+        sort_order: (ln.sort_order as number) ?? idx,
+      };
+    });
+    lines.sort((a, b) => a.sort_order - b.sort_order);
+    const headerDept = (r.department_id as number | null | undefined) ?? null;
+    const legacyDept = eq.department_id ?? null;
+    return {
+      ...r,
+      equipment_make: eq.make,
+      equipment_model: eq.model,
+      equipment_serial: eq.serial_number,
+      equipment_number: eq.equipment_number,
+      equipment_type_name: undefined,
+      equipment: undefined,
+      equipment_request_lines: undefined,
+      lines: lines.length ? lines : undefined,
+      _department_id: headerDept ?? legacyDept,
+    } as EquipmentRequest & { _department_id?: number | null };
+  }
+
+  async getEquipmentRequests(
+    status?: 'pending' | 'approved' | 'rejected' | 'fulfilled',
+    profile?: Profile
+  ): Promise<EquipmentRequest[]> {
     let q = this.supabase
       .from('equipment_requests')
-      .select('*, equipment(make, model, serial_number, equipment_number, department_id)')
+      .select(
+        `
+        *,
+        equipment(make, model, serial_number, equipment_number, department_id),
+        equipment_request_lines(
+          id,
+          equipment_request_id,
+          equipment_type_id,
+          quantity,
+          preferred_equipment_id,
+          sort_order,
+          equipment_types(name)
+        )
+      `
+      )
       .order('created_at', { ascending: false });
     if (status) q = q.eq('status', status);
     const { data, error } = await q;
     if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const eq = (r.equipment || {}) as { make?: string; model?: string; serial_number?: string; equipment_number?: string; department_id?: number | null };
-      return {
-        ...r,
-        equipment_make: eq.make,
-        equipment_model: eq.model,
-        equipment_serial: eq.serial_number,
-        equipment_number: eq.equipment_number,
-        equipment_type_name: null as string | undefined,
-        equipment: undefined,
-        _department_id: eq.department_id,
-      };
-    });
+    let rows = (data ?? []).map((r: Record<string, unknown>) => this.mapEquipmentRequestRow(r));
     if (profile) {
       if (profile.role === 'user') {
         rows = rows.filter((r: { requester_email?: string }) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
@@ -1272,6 +1356,45 @@ export class Database {
         }
       }
     }
+    const prefIds = new Set<number>();
+    for (const r of rows) {
+      const lines = (r as EquipmentRequest).lines;
+      if (lines) {
+        for (const ln of lines) {
+          if (ln.preferred_equipment_id) prefIds.add(ln.preferred_equipment_id);
+        }
+      }
+    }
+    if (prefIds.size > 0) {
+      const { data: prefEq } = await this.supabase
+        .from('equipment')
+        .select('id, make, model, serial_number, equipment_number')
+        .in('id', [...prefIds]);
+      const emap = new Map((prefEq ?? []).map((e: { id: number }) => [e.id, e]));
+      for (const r of rows) {
+        const lines = (r as EquipmentRequest).lines;
+        if (!lines) continue;
+        for (const ln of lines) {
+          if (!ln.preferred_equipment_id) continue;
+          const e = emap.get(ln.preferred_equipment_id) as
+            | { make: string; model: string; serial_number: string; equipment_number: string | null }
+            | undefined;
+          if (e) {
+            ln.preferred_make = e.make;
+            ln.preferred_model = e.model;
+            ln.preferred_serial = e.serial_number;
+            ln.preferred_equipment_number = e.equipment_number;
+          }
+        }
+      }
+    }
+    for (const r of rows) {
+      const lines = (r as EquipmentRequest).lines;
+      if (!lines?.length) continue;
+      for (const ln of lines) {
+        ln.fulfilled_quantity = await this.countSignOutsForLine(ln.id);
+      }
+    }
     return rows.map((r: Record<string, unknown>) => {
       const { _department_id, ...rest } = r;
       return rest;
@@ -1284,6 +1407,7 @@ export class Database {
     requester_email: string;
     requester_phone: string;
     site_id?: number | null;
+    department_id?: number | null;
     building: string;
     room_number?: string | null;
     equipment_number_to_test: string;
@@ -1302,6 +1426,7 @@ export class Database {
     };
     if (data.site_id != null) payload.site_id = data.site_id;
     if (data.room_number != null) payload.room_number = data.room_number;
+    if (data.department_id != null) payload.department_id = data.department_id;
     const { error } = await this.supabase.from('equipment_requests').insert(payload);
     if (error) throw error;
   }
@@ -1312,6 +1437,7 @@ export class Database {
     requester_email: string;
     requester_phone: string;
     site_id?: number | null;
+    department_id?: number | null;
     building: string;
     room_number?: string | null;
     equipment_number_to_test: string;
@@ -1332,23 +1458,138 @@ export class Database {
       };
       if (data.site_id != null) row.site_id = data.site_id;
       if (data.room_number != null) row.room_number = data.room_number;
+      if (data.department_id != null) row.department_id = data.department_id;
       return row;
     });
     const { error } = await this.supabase.from('equipment_requests').insert(rows);
     if (error) throw error;
   }
 
+  async createEquipmentRequestWithLines(data: {
+    lines: { equipment_type_id: number; quantity: number; preferred_equipment_id?: number | null }[];
+    requester_name: string;
+    requester_email: string;
+    requester_phone: string;
+    site_id?: number | null;
+    department_id?: number | null;
+    building: string;
+    room_number?: string | null;
+    equipment_number_to_test: string;
+    date_from: string;
+    date_to: string;
+  }): Promise<number> {
+    if (!data.lines?.length) throw new Error('At least one line is required');
+    const header: Record<string, unknown> = {
+      equipment_id: null,
+      requester_name: data.requester_name,
+      requester_email: data.requester_email,
+      requester_phone: data.requester_phone,
+      building: data.building,
+      equipment_number_to_test: data.equipment_number_to_test,
+      date_from: data.date_from,
+      date_to: data.date_to,
+      status: 'pending',
+    };
+    if (data.site_id != null) header.site_id = data.site_id;
+    if (data.room_number != null) header.room_number = data.room_number;
+    if (data.department_id != null) header.department_id = data.department_id;
+    const { data: inserted, error } = await this.supabase.from('equipment_requests').insert(header).select('id').single();
+    if (error) throw error;
+    const requestId = inserted?.id as number;
+    if (!requestId) throw new Error('Failed to create request');
+    const lineRows = data.lines.map((ln, i) => ({
+      equipment_request_id: requestId,
+      equipment_type_id: ln.equipment_type_id,
+      quantity: ln.quantity,
+      preferred_equipment_id: ln.preferred_equipment_id ?? null,
+      sort_order: i,
+    }));
+    const { error: lineErr } = await this.supabase.from('equipment_request_lines').insert(lineRows);
+    if (lineErr) throw lineErr;
+    await this.notifyManagersNewRequest(requestId, data.requester_name, data.site_id ?? null, data.department_id ?? null);
+    return requestId;
+  }
+
+  private async notifyManagersNewRequest(
+    requestId: number,
+    requesterName: string,
+    siteId: number | null,
+    departmentId: number | null
+  ) {
+    const profileIds = await this.getManagerProfileIdsForRequest(siteId, departmentId);
+    const title = 'New equipment request';
+    const body = `${requesterName} submitted a request.`;
+    const rows = profileIds.map((profile_id) => ({
+      profile_id,
+      kind: 'equipment_request',
+      equipment_request_id: requestId,
+      title,
+      body,
+    }));
+    if (rows.length) await this.supabase.from('app_notifications').insert(rows);
+  }
+
+  /** Equipment managers scoped to site/department + company admins for that company. */
+  async getManagerProfileIdsForRequest(siteId: number | null, departmentId: number | null): Promise<number[]> {
+    const ids = new Set<number>();
+    if (!siteId && !departmentId) {
+      const { data: supers } = await this.supabase.from('profiles').select('id').eq('role', 'super_admin');
+      (supers ?? []).forEach((p: { id: number }) => ids.add(p.id));
+      return [...ids];
+    }
+    let companyId: number | null = null;
+    if (siteId) {
+      const { data: site } = await this.supabase.from('sites').select('company_id').eq('id', siteId).single();
+      companyId = site?.company_id ?? null;
+    }
+    if (companyId) {
+      const { data: admins } = await this.supabase
+        .from('profiles')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('role', 'company_admin');
+      (admins ?? []).forEach((a: { id: number }) => ids.add(a.id));
+    }
+    const { data: managers } = await this.supabase.from('profiles').select('id').eq('role', 'equipment_manager');
+    for (const row of managers ?? []) {
+      const pid = (row as { id: number }).id;
+      const { data: accessRows } = await this.supabase
+        .from('profile_access')
+        .select('site_id, department_id, equipment_id')
+        .eq('profile_id', pid);
+      if (!accessRows?.length) continue;
+      let ok = false;
+      for (const a of accessRows as { site_id: number; department_id: number | null; equipment_id: number | null }[]) {
+        if (a.equipment_id) continue;
+        if (departmentId) {
+          if (a.site_id === siteId && (a.department_id === departmentId || a.department_id === null)) ok = true;
+        } else if (siteId) {
+          if (a.site_id === siteId) ok = true;
+        }
+        if (ok) break;
+      }
+      if (ok) ids.add(pid);
+    }
+    return [...ids];
+  }
+
+  /** Approve only (no sign-outs). Legacy single-equipment requests still return legacy payload for the route to create sign-out. */
   async approveEquipmentRequest(
     id: number,
     reviewedBy: string
-  ): Promise<{ equipment_id: number; requester_name: string; building: string; room_number?: string | null; equipment_number_to_test: string; date_from: string; date_to: string }> {
+  ): Promise<
+    | { legacy: true; equipment_id: number; requester_name: string; building: string; room_number?: string | null; equipment_number_to_test: string; date_from: string; date_to: string }
+    | { legacy: false }
+  > {
     const { data: req, error: fetchErr } = await this.supabase
       .from('equipment_requests')
-      .select('*')
+      .select('*, equipment_request_lines(id)')
       .eq('id', id)
       .single();
     if (fetchErr || !req) throw new Error('Request not found');
     if (req.status !== 'pending') throw new Error('Request already reviewed');
+    const lineRows = (req as { equipment_request_lines?: { id: number }[] }).equipment_request_lines ?? [];
+    const hasLines = lineRows.length > 0;
     const { error } = await this.supabase
       .from('equipment_requests')
       .update({
@@ -1358,15 +1599,120 @@ export class Database {
       })
       .eq('id', id);
     if (error) throw error;
+    if (hasLines || !req.equipment_id) {
+      return { legacy: false };
+    }
     return {
-      equipment_id: req.equipment_id,
-      requester_name: req.requester_name,
-      building: req.building,
+      legacy: true,
+      equipment_id: req.equipment_id as number,
+      requester_name: req.requester_name as string,
+      building: req.building as string,
       room_number: (req as { room_number?: string | null }).room_number ?? null,
-      equipment_number_to_test: req.equipment_number_to_test,
-      date_from: req.date_from,
-      date_to: req.date_to,
+      equipment_number_to_test: req.equipment_number_to_test as string,
+      date_from: req.date_from as string,
+      date_to: req.date_to as string,
     };
+  }
+
+  private async countSignOutsForLine(lineId: number): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('sign_outs')
+      .select('*', { count: 'exact', head: true })
+      .eq('equipment_request_line_id', lineId);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  private async isRequestFullyFulfilled(requestId: number): Promise<boolean> {
+    const { data: lines, error } = await this.supabase
+      .from('equipment_request_lines')
+      .select('id, quantity')
+      .eq('equipment_request_id', requestId);
+    if (error) throw error;
+    if (!lines?.length) return true;
+    for (const ln of lines as { id: number; quantity: number }[]) {
+      const c = await this.countSignOutsForLine(ln.id);
+      if (c < ln.quantity) return false;
+    }
+    return true;
+  }
+
+  private signedOutAtFromDateFrom(dateFrom: string): string {
+    const [y, m, d] = dateFrom.split('-').map((x) => parseInt(x, 10));
+    return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
+  }
+
+  /** Create sign-outs for fulfillments; completes request when every line has enough sign-outs. */
+  async fulfillEquipmentRequest(
+    profile: Profile,
+    requestId: number,
+    reviewedBy: string,
+    fulfillments: { line_id: number; equipment_id: number }[]
+  ): Promise<void> {
+    if (!fulfillments.length) throw new Error('No fulfillments provided');
+    const { data: req, error: fetchErr } = await this.supabase.from('equipment_requests').select('*').eq('id', requestId).single();
+    if (fetchErr || !req) throw new Error('Request not found');
+    if (req.status === 'rejected' || req.status === 'fulfilled') throw new Error('Request cannot be fulfilled');
+    const { data: lines, error: lineErr } = await this.supabase
+      .from('equipment_request_lines')
+      .select('id, equipment_request_id, quantity, equipment_type_id')
+      .eq('equipment_request_id', requestId);
+    if (lineErr) throw lineErr;
+    if (!lines?.length) throw new Error('Request has no lines');
+    const lineById = new Map(
+      (lines as { id: number; quantity: number; equipment_type_id: number }[]).map((l) => [l.id, l])
+    );
+    const active = await this.getActiveSignOuts(profile);
+    const activeIds = new Set(active.map((s) => s.equipment_id));
+    for (const f of fulfillments) {
+      const ln = lineById.get(f.line_id);
+      if (!ln) throw new Error(`Invalid line ${f.line_id}`);
+      const current = await this.countSignOutsForLine(f.line_id);
+      if (current >= ln.quantity) throw new Error(`Line ${f.line_id} is already fully assigned`);
+      if (activeIds.has(f.equipment_id)) throw new Error(`Equipment ${f.equipment_id} is already signed out`);
+      const eq = await this.getEquipmentById(f.equipment_id, profile);
+      if (!eq) throw new Error(`Equipment ${f.equipment_id} not found or access denied`);
+      if (eq.equipment_type_id !== ln.equipment_type_id) throw new Error('Equipment does not match the requested type for this line');
+      activeIds.add(f.equipment_id);
+      const purposeParts = [`Building: ${req.building}`, `Equipment to test: #${req.equipment_number_to_test}`, `Dates: ${req.date_from} to ${req.date_to}`];
+      const room = (req as { room_number?: string | null }).room_number ?? null;
+      const signOutId = await this.createSignOut({
+        equipment_id: f.equipment_id,
+        signed_out_by: req.requester_name as string,
+        purpose: purposeParts.join(', '),
+        building: req.building as string,
+        room_number: room ?? undefined,
+        equipment_number_to_test: req.equipment_number_to_test as string,
+        date_from: req.date_from as string,
+        date_to: req.date_to as string,
+        signed_out_at: this.signedOutAtFromDateFrom(req.date_from as string),
+        equipment_request_id: requestId,
+        equipment_request_line_id: f.line_id,
+      });
+      if (signOutId) {
+        await this.addUsage({
+          sign_out_id: signOutId,
+          system_equipment: req.equipment_number_to_test as string,
+        });
+      }
+    }
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = {};
+    if (req.status === 'pending') {
+      updates.reviewed_by = reviewedBy;
+      updates.reviewed_at = now;
+    }
+    const complete = await this.isRequestFullyFulfilled(requestId);
+    if (complete) {
+      updates.status = 'fulfilled';
+      updates.fulfilled_at = now;
+    } else if (req.status === 'pending') {
+      updates.status = 'approved';
+    }
+    if (Object.keys(updates).length) {
+      const { error: upErr } = await this.supabase.from('equipment_requests').update(updates).eq('id', requestId);
+      if (upErr) throw upErr;
+    }
   }
 
   async rejectEquipmentRequest(id: number, reviewedBy: string, comment?: string) {
@@ -1389,6 +1735,43 @@ export class Database {
     if (error) throw error;
   }
 
+  async getNotifications(profileId: number, unreadOnly?: boolean): Promise<AppNotification[]> {
+    let q = this.supabase.from('app_notifications').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(100);
+    if (unreadOnly) q = q.is('read_at', null);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []) as AppNotification[];
+  }
+
+  async getUnreadNotificationCount(profileId: number): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('app_notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('profile_id', profileId)
+      .is('read_at', null);
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  async markNotificationsRead(profileId: number, ids: number[]): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.supabase
+      .from('app_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('profile_id', profileId)
+      .in('id', ids);
+    if (error) throw error;
+  }
+
+  async markAllNotificationsRead(profileId: number): Promise<void> {
+    const { error } = await this.supabase
+      .from('app_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('profile_id', profileId)
+      .is('read_at', null);
+    if (error) throw error;
+  }
+
   async deleteCalibrationRecord(id: number): Promise<{ storage_path: string } | null> {
     const { data, error: fetchErr } = await this.supabase
       .from('calibration_records')
@@ -1401,17 +1784,38 @@ export class Database {
     return data as { storage_path: string };
   }
 
-  /** Sign-outs overlapping a date range (for heat map availability) */
+  /** Sign-outs overlapping a date range (for heat map availability). Uses reservation dates when set. */
   async getSignOutsInDateRange(profile: Profile | undefined, startDate: string, endDate: string): Promise<SignOut[]> {
     const all = await this.getAllSignOuts(profile);
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
     return all.filter((s) => {
+      const df = (s as SignOut).date_from;
+      const dt = (s as SignOut).date_to;
+      if (df && dt) {
+        return df <= endDate && dt >= startDate;
+      }
       const outAt = new Date(s.signed_out_at);
       const inAt = s.signed_in_at ? new Date(s.signed_in_at) : new Date();
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T23:59:59.999');
       return outAt <= end && inAt >= start;
     });
+  }
+
+  async updateSignOut(
+    id: number,
+    data: { signed_out_at?: string; date_from?: string | null; date_to?: string | null },
+    profile?: Profile
+  ): Promise<void> {
+    if (profile && profile.role !== 'super_admin' && profile.role !== 'company_admin' && profile.role !== 'equipment_manager') {
+      throw new Error('Not allowed to update sign-out');
+    }
+    const payload: Record<string, unknown> = {};
+    if (data.signed_out_at !== undefined) payload.signed_out_at = data.signed_out_at;
+    if (data.date_from !== undefined) payload.date_from = data.date_from;
+    if (data.date_to !== undefined) payload.date_to = data.date_to;
+    if (Object.keys(payload).length === 0) return;
+    const { error } = await this.supabase.from('sign_outs').update(payload).eq('id', id);
+    if (error) throw error;
   }
 
   /** Equipment tested: sign_outs with equipment_number_to_test, with site from equipment's department */

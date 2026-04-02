@@ -7,6 +7,13 @@ import CheckInModal from '../components/CheckInModal';
 import BatchCheckoutModal from '../components/BatchCheckoutModal';
 import BarcodeScanInput from '../components/BarcodeScanInput';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 interface SignOut {
   id: number;
@@ -20,9 +27,13 @@ interface SignOut {
   signed_in_by: string | null;
   signed_in_at: string | null;
   purpose: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
 }
 
 export default function SignOuts() {
+  const { profile } = useAuth();
+  const canEditDates = profile?.role === 'equipment_manager' || profile?.role === 'company_admin' || profile?.role === 'super_admin';
   const [activeSignOuts, setActiveSignOuts] = useState<SignOut[]>([]);
   const [allSignOuts, setAllSignOuts] = useState<SignOut[]>([]);
   const [tab, setTab] = useState<'active' | 'history'>('active');
@@ -31,6 +42,11 @@ export default function SignOuts() {
   const [checkInSignOut, setCheckInSignOut] = useState<SignOut | null>(null);
   const [scanError, setScanError] = useState('');
   const [preSelectedEquipmentId, setPreSelectedEquipmentId] = useState<number | undefined>();
+  const [editDates, setEditDates] = useState<SignOut | null>(null);
+  const [editDateFrom, setEditDateFrom] = useState('');
+  const [editDateTo, setEditDateTo] = useState('');
+  const [editSignedOutAt, setEditSignedOutAt] = useState('');
+  const [savingDates, setSavingDates] = useState(false);
 
   const load = async () => {
     const [active, all] = await Promise.all([
@@ -143,15 +159,32 @@ export default function SignOuts() {
                     </>
                   )}
                   <td>
-                    {!s.signed_in_at && (
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
-                        onClick={() => setCheckInSignOut(s)}
-                      >
-                        <LogIn size={14} /> Check In
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {canEditDates && !s.signed_in_at && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+                          onClick={() => {
+                            setEditDates(s);
+                            setEditDateFrom((s.date_from ?? '').slice(0, 10));
+                            setEditDateTo((s.date_to ?? '').slice(0, 10));
+                            setEditSignedOutAt(toDatetimeLocalValue(s.signed_out_at));
+                          }}
+                        >
+                          Edit dates
+                        </button>
+                      )}
+                      {!s.signed_in_at && (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+                          onClick={() => setCheckInSignOut(s)}
+                        >
+                          <LogIn size={14} /> Check In
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -236,6 +269,75 @@ export default function SignOuts() {
             load();
           }}
         />
+      )}
+
+      {editDates && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setEditDates(null)}
+        >
+          <div className="card" style={{ maxWidth: 420, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="card-title">Edit sign-out dates</h3>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Reservation window (used on the equipment heat map) and the recorded sign-out timestamp.
+            </p>
+            <div className="form-group">
+              <label>Date from</label>
+              <input type="date" value={editDateFrom} onChange={(e) => setEditDateFrom(e.target.value)} style={{ width: '100%' }} />
+            </div>
+            <div className="form-group">
+              <label>Date to</label>
+              <input type="date" value={editDateTo} onChange={(e) => setEditDateTo(e.target.value)} style={{ width: '100%' }} />
+            </div>
+            <div className="form-group">
+              <label>Signed out at (local)</label>
+              <input
+                type="datetime-local"
+                value={editSignedOutAt}
+                onChange={(e) => setEditSignedOutAt(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={savingDates}
+                onClick={async () => {
+                  setSavingDates(true);
+                  try {
+                    const d = new Date(editSignedOutAt);
+                    await api.signOuts.update(editDates.id, {
+                      date_from: editDateFrom || null,
+                      date_to: editDateTo || null,
+                      signed_out_at: Number.isNaN(d.getTime()) ? undefined : d.toISOString(),
+                    });
+                    setEditDates(null);
+                    load();
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : 'Failed to save');
+                  } finally {
+                    setSavingDates(false);
+                  }
+                }}
+              >
+                {savingDates ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditDates(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

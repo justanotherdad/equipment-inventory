@@ -121,8 +121,19 @@ export const api = {
     getInDateRange: (start: string, end: string) =>
       request(`/api/sign-outs/date-range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
     create: (data: object) => request('/api/sign-outs', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { signed_out_at?: string; date_from?: string | null; date_to?: string | null }) =>
+      request(`/api/sign-outs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     checkIn: (id: number, data: { signed_in_by: string }) =>
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  notifications: {
+    getAll: (unreadOnly?: boolean) =>
+      request<Array<{ id: number; title: string; body: string | null; equipment_request_id: number | null; read_at: string | null; created_at: string }>>(
+        `/api/notifications${unreadOnly ? '?unread=1' : ''}`
+      ),
+    unreadCount: () => request<{ count: number }>('/api/notifications/unread-count'),
+    markRead: (ids?: number[], all?: boolean) =>
+      request('/api/notifications/mark-read', { method: 'POST', body: JSON.stringify({ ids, all }) }),
   },
   equipmentTested: {
     getAll: () => request<Array<{ equipment_number_to_test: string; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }>>('/api/equipment-tested'),
@@ -192,15 +203,17 @@ export const api = {
     remove: (id: number) => request(`/api/usage/${id}`, { method: 'DELETE' }),
   },
   equipmentRequests: {
-    getAll: (status?: 'pending' | 'approved' | 'rejected') =>
+    getAll: (status?: 'pending' | 'approved' | 'rejected' | 'fulfilled') =>
       request(`/api/equipment-requests${status ? `?status=${status}` : ''}`),
     create: (data: {
       equipment_id?: number;
       equipment_ids?: number[];
+      lines?: { equipment_type_id: number; quantity: number; preferred_equipment_id?: number | null }[];
       requester_name: string;
       requester_email: string;
       requester_phone: string;
       site_id?: number | null;
+      department_id?: number | null;
       building: string;
       room_number?: string | null;
       equipment_number_to_test: string;
@@ -211,5 +224,10 @@ export const api = {
       request(`/api/equipment-requests/${id}/approve`, { method: 'POST', body: JSON.stringify({ reviewed_by: reviewedBy }) }),
     reject: (id: number, reviewedBy: string, comment?: string) =>
       request(`/api/equipment-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ reviewed_by: reviewedBy, comment }) }),
+    fulfill: (id: number, reviewedBy: string, fulfillments: { line_id: number; equipment_id: number }[]) =>
+      request(`/api/equipment-requests/${id}/fulfill`, {
+        method: 'POST',
+        body: JSON.stringify({ reviewed_by: reviewedBy, fulfillments }),
+      }),
   },
 };

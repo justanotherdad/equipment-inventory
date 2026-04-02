@@ -34,6 +34,8 @@ interface SignOutRecord {
   signed_out_at: string;
   signed_in_at: string | null;
   purpose: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
 }
 
 type SortKey =
@@ -74,10 +76,21 @@ function getStatusForEquipment(equipmentId: number, activeSignOuts: SignOutRecor
   return 'checked_out';
 }
 
+/** Parse YYYY-MM-DD as local calendar date (avoids UTC off-by-one from `new Date('YYYY-MM-DD')`). */
+function parseLocalDateYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+  return new Date(y, m - 1, d);
+}
+
 function signOutCoversDay(signOut: SignOutRecord, dayStr: string): boolean {
-  const dayStart = new Date(dayStr);
+  const df = signOut.date_from;
+  const dt = signOut.date_to;
+  if (df && dt) {
+    return dayStr >= df && dayStr <= dt;
+  }
+  const dayStart = parseLocalDateYmd(dayStr);
   dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStr);
+  const dayEnd = parseLocalDateYmd(dayStr);
   dayEnd.setHours(23, 59, 59, 999);
   const outAt = new Date(signOut.signed_out_at);
   const inAt = signOut.signed_in_at ? new Date(signOut.signed_in_at) : new Date();
@@ -122,10 +135,12 @@ export default function EquipmentList() {
   }, []);
 
   const loadSignOutsForMonth = async () => {
-    const start = new Date(heatMapMonth.year, heatMapMonth.month, 1);
-    const end = new Date(heatMapMonth.year, heatMapMonth.month + 1, 0);
-    const startStr = start.toISOString().slice(0, 10);
-    const endStr = end.toISOString().slice(0, 10);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const y = heatMapMonth.year;
+    const mo = heatMapMonth.month + 1;
+    const startStr = `${y}-${pad(mo)}-01`;
+    const lastDay = new Date(heatMapMonth.year, heatMapMonth.month + 1, 0).getDate();
+    const endStr = `${y}-${pad(mo)}-${pad(lastDay)}`;
     const data = await api.signOuts.getInDateRange(startStr, endStr);
     setSignOutsInMonth(data as SignOutRecord[]);
   };
