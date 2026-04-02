@@ -967,11 +967,27 @@ app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
   }
 });
 
-// Serve static files in production
+// Serve static files in production — inject public Supabase env into index.html so the client works
+// when VITE_* vars were not present at build time (common on shared hosting).
 const distPath = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
+  app.use(express.static(distPath, { index: false }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    const indexPath = path.join(distPath, 'index.html');
+    if (!fs.existsSync(indexPath)) return next();
+    let html = fs.readFileSync(indexPath, 'utf8');
+    const envUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const envAnon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    if (envUrl && envAnon) {
+      const payload = JSON.stringify({
+        VITE_SUPABASE_URL: envUrl,
+        VITE_SUPABASE_ANON_KEY: envAnon,
+      });
+      html = html.replace('<head>', `<head><script>window.__ENV__=${payload}</script>`);
+    }
+    res.type('html').send(html);
+  });
 }
 
 const HOST = process.env.HOST ?? '0.0.0.0';

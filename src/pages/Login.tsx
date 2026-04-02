@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { BrandLogo } from '../components/BrandLogo';
 import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
@@ -53,9 +53,12 @@ export default function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <Package size={40} />
-            <h1>Equipment Inventory</h1>
-            <p style={{ color: 'var(--danger)' }}>Auth not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</p>
+            <BrandLogo height={40} />
+            <h1>EquipForge</h1>
+            <p style={{ color: 'var(--danger)' }}>
+              Auth not configured. For local dev, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env. For production,
+              set SUPABASE_ANON_KEY (anon/public key from Supabase → Settings → API) alongside SUPABASE_URL on the server.
+            </p>
           </div>
         </div>
       </div>
@@ -77,8 +80,8 @@ export default function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <Package size={40} />
-            <h1>Equipment Inventory</h1>
+            <BrandLogo height={40} />
+            <h1>EquipForge</h1>
             <p>Reset your password</p>
           </div>
           {resetSent ? (
@@ -131,8 +134,8 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <Package size={40} />
-          <h1>Equipment Inventory</h1>
+          <BrandLogo height={40} />
+          <h1>EquipForge</h1>
           <p>Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">

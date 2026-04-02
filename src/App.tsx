@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { api } from './api';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import { BrandLogo } from './components/BrandLogo';
 import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
 import Dashboard from './pages/Dashboard';
@@ -89,8 +90,8 @@ function ProtectedLayout() {
     <div className="app-layout">
         <aside className="sidebar">
           <div className="sidebar-header">
-            <Package size={28} />
-            <h1>Equipment Inventory</h1>
+            <BrandLogo height={28} />
+            <h1>EquipForge</h1>
             <button
               type="button"
               className="sidebar-toggle"
@@ -129,7 +130,7 @@ function ProtectedLayout() {
               <LogOut size={20} />
               <span>Sign out</span>
             </button>
-            <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', marginTop: 'auto' }}>
+            <div className="sidebar-footer-email">
               {profile.email}
             </div>
           </nav>

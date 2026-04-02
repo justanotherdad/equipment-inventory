@@ -1,19 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-primary: #0f1419;
-  --bg-secondary: #1a2332;
-  --bg-tertiary: #243044;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-muted: rgba(59, 130, 246, 0.15);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border: #334155;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* EquipForge brand */
+  --primary: #455a64;
+  --primary-hover: #37474f;
+  --accent: #ff7043;
+  --accent-hover: #f4511e;
+  --accent-muted: rgba(255, 112, 67, 0.18);
+
+  /* Surfaces */
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eceff1;
+
+  /* Typography */
+  --text-primary: #263238;
+  --text-secondary: #546e7a;
+  --text-muted: #78909c;
+  --border: #cfd8dc;
+
+  /* Semantic */
+  --success: #26de81;
+  --success-muted: rgba(38, 222, 129, 0.18);
+  --warning: #ffb74d;
+  --warning-muted: rgba(255, 183, 77, 0.22);
+  --danger: #e53935;
+
+  /* Equipment status (badges & calendar) */
+  --equipment-status-available: #26de81;
+  --equipment-status-in-use: #ffb74d;
+  --equipment-status-out-of-service: #e53935;
+
+  /* Sidebar on primary steel */
+  --sidebar-text: #eceff1;
+  --sidebar-text-muted: rgba(236, 239, 241, 0.65);
+  --sidebar-nav-link: rgba(255, 255, 255, 0.82);
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+
+  --table-row-hover: rgba(69, 90, 100, 0.06);
 }
 
 * {
@@ -26,7 +50,7 @@ html {
 
 body {
   margin: 0;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -42,6 +66,8 @@ button {
   cursor: pointer;
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: inherit;
 }

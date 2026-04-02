@@ -62,8 +62,8 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 
 const STATUS_LABELS: Record<EquipmentStatus, string> = {
   available: 'Available',
-  checked_out: 'Checked out',
-  out_for_calibration: 'Out for calibration',
+  checked_out: 'In-Use',
+  out_for_calibration: 'Out-of-Service',
 };
 
 function getStatusForEquipment(equipmentId: number, activeSignOuts: SignOutRecord[]): EquipmentStatus {
@@ -458,7 +458,7 @@ export default function EquipmentList() {
                   <td>{e.serial_number}</td>
                   <td>{e.equipment_number ? `#${e.equipment_number}` : '—'}</td>
                   <td>
-                    <span className={`status-badge status-${e.status}`} style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', borderRadius: 6 }}>
+                    <span className={`status-badge status-${e.status}`} style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', borderRadius: 4 }}>
                       {STATUS_LABELS[e.status]}
                     </span>
                   </td>
@@ -551,9 +551,9 @@ export default function EquipmentList() {
             </button>
           </div>
           <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: '#22c55e', marginRight: 4 }} /> Available</span>
-            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: '#eab308', marginRight: 4 }} /> Checked out</span>
-            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: '#f97316', marginRight: 4 }} /> Calibration</span>
+            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-available)', marginRight: 4 }} /> Available</span>
+            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-in-use)', marginRight: 4 }} /> In-Use</span>
+            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-out-of-service)', marginRight: 4 }} /> Out-of-Service</span>
           </div>
         </div>
         <div style={{ width: '100%', overflowX: 'auto' }}>
@@ -570,7 +570,12 @@ export default function EquipmentList() {
                   </Link>
                   {daysInMonth.days.map((day) => {
                     const status = getStatusForEquipmentOnDay(e.id, day);
-                    const color = status === 'available' ? '#22c55e' : status === 'checked_out' ? '#eab308' : '#f97316';
+                    const color =
+                      status === 'available'
+                        ? 'var(--equipment-status-available)'
+                        : status === 'checked_out'
+                          ? 'var(--equipment-status-in-use)'
+                          : 'var(--equipment-status-out-of-service)';
                     const dateStr = `${heatMapMonth.year}-${String(heatMapMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     return (
                       <div

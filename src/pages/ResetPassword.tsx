@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { BrandLogo } from '../components/BrandLogo';
 import PasswordInput from '../components/PasswordInput';
 
 export default function ResetPassword() {
@@ -80,8 +80,8 @@ export default function ResetPassword() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <Package size={40} />
-          <h1>Equipment Inventory</h1>
+          <BrandLogo height={40} />
+          <h1>EquipForge</h1>
           <p>Set new password</p>
         </div>
         {success ? (
