@@ -80,8 +80,7 @@ export default function ResetPassword() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <BrandLogo height={40} />
-          <h1>EquipForge</h1>
+          <BrandLogo variant="auth" accentFallback />
           <p>Set new password</p>
         </div>
         {success ? (

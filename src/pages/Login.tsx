@@ -53,8 +53,7 @@ export default function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <BrandLogo height={40} />
-            <h1>EquipForge</h1>
+            <BrandLogo variant="auth" accentFallback />
             <p style={{ color: 'var(--danger)' }}>
               Auth not configured. For local dev, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env. For production,
               set SUPABASE_ANON_KEY (anon/public key from Supabase → Settings → API) alongside SUPABASE_URL on the server.
@@ -80,8 +79,7 @@ export default function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <BrandLogo height={40} />
-            <h1>EquipForge</h1>
+            <BrandLogo variant="auth" accentFallback />
             <p>Reset your password</p>
           </div>
           {resetSent ? (
@@ -134,8 +132,7 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <BrandLogo height={40} />
-          <h1>EquipForge</h1>
+          <BrandLogo variant="auth" accentFallback />
           <p>Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">

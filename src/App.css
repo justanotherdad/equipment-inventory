@@ -795,11 +795,10 @@ tr:hover td {
 .login-header {
   text-align: center;
   margin-bottom: 1.5rem;
-}
-
-.login-header h1 {
-  margin: 0.5rem 0 0.25rem;
-  font-size: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .login-header p {

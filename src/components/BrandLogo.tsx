@@ -4,7 +4,7 @@ import { Package } from 'lucide-react';
 /** Try in order; Linux hosts are case-sensitive (Logo.png vs logo.png). */
 const LOGO_SRCS = ['/logo.svg', '/logo.png', '/Logo.png'];
 
-export type BrandLogoVariant = 'default' | 'landing' | 'sidebar';
+export type BrandLogoVariant = 'default' | 'landing' | 'auth' | 'sidebar';
 
 /**
  * Loads branding from `public/` (copied to site root). Preferred: `logo.svg` or `logo.png`.
@@ -29,11 +29,17 @@ export function BrandLogo({
 
   if (srcIndex >= LOGO_SRCS.length) {
     const iconSize =
-      variant === 'landing' ? 96 : variant === 'sidebar' ? 56 : height;
+      variant === 'landing'
+        ? 96
+        : variant === 'auth'
+          ? 80
+          : variant === 'sidebar'
+            ? 56
+            : height;
     const fallbackStyle =
       variant === 'sidebar'
         ? { color: 'var(--sidebar-text)' }
-        : accentFallback || variant === 'landing'
+        : accentFallback || variant === 'landing' || variant === 'auth'
           ? { color: 'var(--accent)' }
           : undefined;
     return (
@@ -54,6 +60,27 @@ export function BrandLogo({
           maxWidth: 'min(440px, 92vw)',
           height: 'auto',
           maxHeight: 'clamp(100px, 28vw, 260px)',
+          objectFit: 'contain',
+          objectPosition: 'center',
+          display: 'block',
+          margin: '0 auto',
+        }}
+        onError={() => setSrcIndex((i) => i + 1)}
+      />
+    );
+  }
+
+  if (variant === 'auth') {
+    return (
+      <img
+        src={src}
+        alt="EquipForge"
+        className={className}
+        style={{
+          width: '100%',
+          maxWidth: 'min(300px, 100%)',
+          height: 'auto',
+          maxHeight: 'clamp(72px, 24vw, 160px)',
           objectFit: 'contain',
           objectPosition: 'center',
           display: 'block',
