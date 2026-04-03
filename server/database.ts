@@ -1,5 +1,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+/** Matches "Dates: YYYY-MM-DD to YYYY-MM-DD" in sign-out purpose (see createSignOut / fulfill). */
+function parseReservationDatesFromPurpose(purpose: string | null | undefined): { from: string | null; to: string | null } {
+  if (!purpose) return { from: null, to: null };
+  const m = purpose.match(/Dates:\s*(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i);
+  if (!m) return { from: null, to: null };
+  return { from: m[1], to: m[2] };
+}
+
+const SIGN_OUT_ACTIVE_END = new Date('9999-12-31T23:59:59.999Z');
+
 export interface EquipmentType {
   id: number;
   name: string;
@@ -1788,13 +1798,15 @@ export class Database {
   async getSignOutsInDateRange(profile: Profile | undefined, startDate: string, endDate: string): Promise<SignOut[]> {
     const all = await this.getAllSignOuts(profile);
     return all.filter((s) => {
-      const df = (s as SignOut).date_from;
-      const dt = (s as SignOut).date_to;
+      const row = s as SignOut;
+      const parsed = parseReservationDatesFromPurpose(row.purpose);
+      let df = row.date_from ?? parsed.from;
+      let dt = row.date_to ?? parsed.to;
       if (df && dt) {
         return df <= endDate && dt >= startDate;
       }
       const outAt = new Date(s.signed_out_at);
-      const inAt = s.signed_in_at ? new Date(s.signed_in_at) : new Date();
+      const inAt = s.signed_in_at ? new Date(s.signed_in_at) : SIGN_OUT_ACTIVE_END;
       const start = new Date(startDate + 'T00:00:00');
       const end = new Date(endDate + 'T23:59:59.999');
       return outAt <= end && inAt >= start;

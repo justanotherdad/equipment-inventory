@@ -38,6 +38,17 @@ interface SignOutRecord {
   date_to?: string | null;
 }
 
+/** Matches "Dates: YYYY-MM-DD to YYYY-MM-DD" from sign-out purpose (same format as createSignOut). */
+function parseReservationDatesFromPurpose(purpose: string | null | undefined): { from: string | null; to: string | null } {
+  if (!purpose) return { from: null, to: null };
+  const m = purpose.match(/Dates:\s*(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i);
+  if (!m) return { from: null, to: null };
+  return { from: m[1], to: m[2] };
+}
+
+/** Active sign-outs with no return date should cover all future calendar days until check-in (not "until now"). */
+const FAR_FUTURE_END = new Date('9999-12-31T23:59:59.999Z');
+
 type SortKey =
   | 'equipment_type_name'
   | 'department_name'
@@ -83,8 +94,9 @@ function parseLocalDateYmd(ymd: string): Date {
 }
 
 function signOutCoversDay(signOut: SignOutRecord, dayStr: string): boolean {
-  const df = signOut.date_from;
-  const dt = signOut.date_to;
+  const parsed = parseReservationDatesFromPurpose(signOut.purpose);
+  const df = signOut.date_from ?? parsed.from;
+  const dt = signOut.date_to ?? parsed.to;
   if (df && dt) {
     return dayStr >= df && dayStr <= dt;
   }
@@ -93,7 +105,7 @@ function signOutCoversDay(signOut: SignOutRecord, dayStr: string): boolean {
   const dayEnd = parseLocalDateYmd(dayStr);
   dayEnd.setHours(23, 59, 59, 999);
   const outAt = new Date(signOut.signed_out_at);
-  const inAt = signOut.signed_in_at ? new Date(signOut.signed_in_at) : new Date();
+  const inAt = signOut.signed_in_at ? new Date(signOut.signed_in_at) : FAR_FUTURE_END;
   return outAt <= dayEnd && inAt >= dayStart;
 }
 
@@ -108,6 +120,10 @@ export default function EquipmentList() {
   const [filterType, setFilterType] = useState<string>('');
   const [filterMake, setFilterMake] = useState<string>('');
   const [filterModel, setFilterModel] = useState<string>('');
+  const [heatMapSearch, setHeatMapSearch] = useState('');
+  const [heatMapFilterType, setHeatMapFilterType] = useState('');
+  const [heatMapFilterMake, setHeatMapFilterMake] = useState('');
+  const [heatMapFilterModel, setHeatMapFilterModel] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -187,12 +203,42 @@ export default function EquipmentList() {
     });
   }, [equipment, filter, filterType, filterMake, filterModel]);
 
+  const filteredForHeatMap = useMemo(() => {
+    return equipment.filter((e) => {
+      if (heatMapSearch) {
+        const q = heatMapSearch.toLowerCase();
+        if (
+          !e.make.toLowerCase().includes(q) &&
+          !e.model.toLowerCase().includes(q) &&
+          !e.serial_number.toLowerCase().includes(q) &&
+          !(e.equipment_number?.toLowerCase().includes(q) ?? false) &&
+          !e.equipment_type_name?.toLowerCase().includes(q) &&
+          !(e.department_name?.toLowerCase().includes(q) ?? false) &&
+          !(e.company_name?.toLowerCase().includes(q) ?? false)
+        ) {
+          return false;
+        }
+      }
+      if (heatMapFilterType && e.equipment_type_name !== heatMapFilterType) return false;
+      if (heatMapFilterMake && e.make !== heatMapFilterMake) return false;
+      if (heatMapFilterModel && e.model !== heatMapFilterModel) return false;
+      return true;
+    });
+  }, [equipment, heatMapSearch, heatMapFilterType, heatMapFilterMake, heatMapFilterModel]);
+
   const equipmentWithStatus = useMemo(() => {
     return filtered.map((e) => ({
       ...e,
       status: getStatusForEquipment(e.id, activeSignOuts),
     }));
   }, [filtered, activeSignOuts]);
+
+  const equipmentWithStatusForHeatMap = useMemo(() => {
+    return filteredForHeatMap.map((e) => ({
+      ...e,
+      status: getStatusForEquipment(e.id, activeSignOuts),
+    }));
+  }, [filteredForHeatMap, activeSignOuts]);
 
   const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
 
@@ -314,7 +360,7 @@ export default function EquipmentList() {
   };
 
   const getEquipmentForDay = (day: number) => {
-    return equipmentWithStatus.map((e) => ({
+    return equipmentWithStatusForHeatMap.map((e) => ({
       ...e,
       dayStatus: getStatusForEquipmentOnDay(e.id, day) as EquipmentStatus,
     }));
@@ -328,7 +374,8 @@ export default function EquipmentList() {
     setHeatMapMonth((m) => (m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 }));
   };
 
-  const hasActiveFilters = filterType || filterMake || filterModel;
+  const hasActiveTableFilters = filter || filterType || filterMake || filterModel;
+  const hasActiveHeatMapFilters = heatMapSearch || heatMapFilterType || heatMapFilterMake || heatMapFilterModel;
 
   return (
     <div>
@@ -411,8 +458,17 @@ export default function EquipmentList() {
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-            {hasActiveFilters && (
-              <button type="button" className="btn btn-secondary" onClick={() => { setFilterType(''); setFilterMake(''); setFilterModel(''); }}>
+            {hasActiveTableFilters && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setFilter('');
+                  setFilterType('');
+                  setFilterMake('');
+                  setFilterModel('');
+                }}
+              >
                 Clear filters
               </button>
             )}
@@ -555,6 +611,70 @@ export default function EquipmentList() {
       {/* Heat map */}
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Availability Heat Map</h3>
+        <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+          Choose which equipment rows appear in the grid below. These filters are independent of the equipment table above.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+          <div className="form-group" style={{ position: 'relative', flex: '1 1 200px', minWidth: 0, marginBottom: 0 }}>
+            <Search size={16} style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="Search…"
+              value={heatMapSearch}
+              onChange={(e) => setHeatMapSearch(e.target.value)}
+              style={{ paddingLeft: '2.25rem', width: '100%', paddingTop: '0.45rem', paddingBottom: '0.45rem' }}
+              aria-label="Heat map search"
+            />
+          </div>
+          <select
+            value={heatMapFilterType}
+            onChange={(e) => setHeatMapFilterType(e.target.value)}
+            style={{ padding: '0.45rem 0.65rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', minWidth: 110 }}
+            aria-label="Heat map type"
+          >
+            <option value="">All types</option>
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <select
+            value={heatMapFilterMake}
+            onChange={(e) => setHeatMapFilterMake(e.target.value)}
+            style={{ padding: '0.45rem 0.65rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', minWidth: 110 }}
+            aria-label="Heat map make"
+          >
+            <option value="">All makes</option>
+            {makeOptions.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={heatMapFilterModel}
+            onChange={(e) => setHeatMapFilterModel(e.target.value)}
+            style={{ padding: '0.45rem 0.65rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', minWidth: 110 }}
+            aria-label="Heat map model"
+          >
+            <option value="">All models</option>
+            {modelOptions.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          {hasActiveHeatMapFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '0.4rem 0.65rem' }}
+              onClick={() => {
+                setHeatMapSearch('');
+                setHeatMapFilterType('');
+                setHeatMapFilterMake('');
+                setHeatMapFilterModel('');
+              }}
+            >
+              Clear heat map filters
+            </button>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button type="button" className="btn btn-secondary" onClick={prevMonth} style={{ padding: '0.35rem 0.5rem' }}>
@@ -578,7 +698,7 @@ export default function EquipmentList() {
               {daysInMonth.days.map((d) => (
                 <div key={d} style={{ padding: '4px 2px', fontWeight: 600, textAlign: 'center' }}>{d}</div>
               ))}
-              {equipmentWithStatus.slice(0, 20).map((e) => (
+              {equipmentWithStatusForHeatMap.slice(0, 20).map((e) => (
                 <div key={e.id} style={{ display: 'contents' }}>
                   <Link to={`/equipment/${e.id}`} className="link" style={{ padding: '4px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.7rem' }}>
                     {e.make} {e.model}
@@ -613,9 +733,14 @@ export default function EquipmentList() {
             </div>
           </div>
         </div>
-        {equipmentWithStatus.length > 20 && (
+        {equipmentWithStatusForHeatMap.length > 20 && (
           <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Showing first 20 equipment. Use filters to narrow down.
+            Showing first 20 of {equipmentWithStatusForHeatMap.length} equipment rows matching the heat map filters.
+          </p>
+        )}
+        {equipment.length > 0 && equipmentWithStatusForHeatMap.length === 0 && (
+          <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--warning)' }}>
+            No equipment matches the heat map filters. Clear or adjust them to see the grid.
           </p>
         )}
       </div>
