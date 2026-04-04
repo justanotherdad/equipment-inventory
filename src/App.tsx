@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from './api';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import './App.css';
@@ -6,6 +6,7 @@ import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu,
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import ScrollToTopButton from './components/ScrollToTopButton';
 import { BrandLogo } from './components/BrandLogo';
 import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
@@ -38,6 +39,7 @@ const navItems = [
 
 function ProtectedLayout() {
   const location = useLocation();
+  const mainContentRef = useRef<HTMLElement>(null);
   const { profile, loading, signOut, refreshProfile } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<{ needsOnboarding: boolean } | null>(null);
@@ -81,7 +83,8 @@ function ProtectedLayout() {
   if (showOnboarding) {
     return (
       <div className="app-layout" style={{ alignItems: 'stretch', justifyContent: 'flex-start' }}>
-        <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        <main ref={mainContentRef} className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+          <ScrollToTopButton scrollContainerRef={mainContentRef} />
           <CompanyAdminOnboarding
             onComplete={async () => {
               await refreshProfile();
@@ -169,7 +172,8 @@ function ProtectedLayout() {
           </nav>
         </aside>
         {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
-        <main className="main-content">
+        <main ref={mainContentRef} className="main-content">
+          <ScrollToTopButton scrollContainerRef={mainContentRef} />
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/equipment" element={<EquipmentList />} />
