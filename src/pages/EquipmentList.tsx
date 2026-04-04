@@ -93,6 +93,25 @@ function parseLocalDateYmd(ymd: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** Format a YYYY-MM-DD key for display (never use `new Date(ymd)` alone — it parses as UTC). */
+function formatYmdLocalLong(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+  if (!y || !m || !d) return ymd;
+  return new Date(y, m - 1, d).toLocaleDateString('default', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function heatMapEquipmentHoverTitle(e: Equipment): string {
+  const name = [e.make, e.model].filter(Boolean).join(' ').trim();
+  const parts = [name || 'Equipment', `S/N ${e.serial_number}`];
+  if (e.equipment_number) parts.push(`Equip #${e.equipment_number}`);
+  return parts.join(' · ');
+}
+
 function signOutCoversDay(signOut: SignOutRecord, dayStr: string): boolean {
   const parsed = parseReservationDatesFromPurpose(signOut.purpose);
   const df = signOut.date_from ?? parsed.from;
@@ -700,7 +719,12 @@ export default function EquipmentList() {
               ))}
               {equipmentWithStatusForHeatMap.slice(0, 20).map((e) => (
                 <div key={e.id} style={{ display: 'contents' }}>
-                  <Link to={`/equipment/${e.id}`} className="link" style={{ padding: '4px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.7rem' }}>
+                  <Link
+                    to={`/equipment/${e.id}`}
+                    className="link"
+                    title={heatMapEquipmentHoverTitle(e)}
+                    style={{ padding: '4px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.7rem' }}
+                  >
                     {e.make} {e.model}
                   </Link>
                   {daysInMonth.days.map((day) => {
@@ -766,7 +790,7 @@ export default function EquipmentList() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ margin: 0 }}>
-                Equipment on {new Date(dayDetail.date).toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                Equipment on {formatYmdLocalLong(dayDetail.date)}
               </h3>
               <button type="button" className="btn btn-secondary" onClick={() => setDayDetail(null)} style={{ padding: '0.35rem' }}>
                 <X size={18} />
