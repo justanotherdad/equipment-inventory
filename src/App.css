@@ -144,6 +144,13 @@ html, body {
   overflow-y: auto;
   min-width: 0;
   position: relative;
+  font-size: var(--app-font-size);
+}
+
+.login-page,
+.landing-page,
+.pricing-page {
+  font-size: var(--app-font-size);
 }
 
 .scroll-to-top-btn {
@@ -800,7 +807,7 @@ tr:hover td {
   flex: 1;
   background: transparent;
   border: none;
-  font-size: 1rem;
+  font-size: 1em;
   color: var(--text-primary);
 }
 
@@ -857,7 +864,7 @@ tr:hover td {
   border-radius: 8px;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: 1em;
 }
 
 .login-form input:focus {
@@ -896,7 +903,7 @@ tr:hover td {
 .landing-tagline {
   margin: 1.25rem 0 2rem;
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 1.25em;
   line-height: 1.5;
 }
 

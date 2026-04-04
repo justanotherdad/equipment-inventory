@@ -107,7 +107,7 @@ function CalRecordRow({
           type="button"
           onClick={onOpenPdf}
           className="link"
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: '1rem' }}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--accent)', fontSize: 'inherit' }}
         >
           <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
           {record.file_name}

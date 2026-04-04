@@ -629,7 +629,7 @@ export default function EquipmentList() {
 
       {/* Heat map */}
       <div className="card" style={{ marginTop: '1.5rem' }}>
-        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Availability Heat Map</h3>
+        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25em' }}>Availability Heat Map</h3>
         <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
           Choose which equipment rows appear in the grid below. These filters are independent of the equipment table above.
         </p>

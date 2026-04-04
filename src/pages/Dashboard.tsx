@@ -61,7 +61,7 @@ export default function Dashboard() {
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 700 }}>
             {stats.overdue > 0 ? <span style={{ color: 'var(--danger)' }}>{stats.overdue}</span> : 0} overdue
-            {stats.dueSoon > 0 && <span style={{ fontSize: '1rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>+ {stats.dueSoon} soon</span>}
+            {stats.dueSoon > 0 && <span style={{ fontSize: 'inherit', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>+ {stats.dueSoon} soon</span>}
           </div>
           <Link to="/calibration" className="link" style={{ fontSize: '0.875rem', marginTop: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
             View status <ArrowRight size={14} />

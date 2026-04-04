@@ -38,6 +38,9 @@
   --sidebar-border: rgba(255, 255, 255, 0.12);
 
   --table-row-hover: rgba(69, 90, 100, 0.06);
+
+  /* Body copy aligned with sidebar nav links */
+  --app-font-size: 0.875rem;
 }
 
 * {
