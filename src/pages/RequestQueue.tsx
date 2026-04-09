@@ -62,8 +62,8 @@ export default function RequestQueue() {
   const [equipment, setEquipment] = useState<EquipmentOpt[]>([]);
   const [activeSignOuts, setActiveSignOuts] = useState<Set<number>>(new Set());
   const [fulfillFor, setFulfillFor] = useState<EquipmentRequest | null>(null);
-  /** slot key -> equipment id */
-  const [fulfillSlots, setFulfillSlots] = useState<Record<string, number | ''>>({});
+  /** line id -> selected equipment ids for this fulfillment batch */
+  const [fulfillLineSelections, setFulfillLineSelections] = useState<Record<number, number[]>>({});
   const [notifs, setNotifs] = useState<Array<{ id: number; title: string; body: string | null; created_at: string }>>([]);
 
   const load = async () => {
@@ -114,17 +114,36 @@ export default function RequestQueue() {
 
   const openFulfill = (r: EquipmentRequest) => {
     setFulfillFor(r);
-    const next: Record<string, number | ''> = {};
+    const next: Record<number, number[]> = {};
     if (r.lines) {
       for (const ln of r.lines) {
-        const done = ln.fulfilled_quantity ?? 0;
-        const need = Math.max(0, ln.quantity - done);
-        for (let i = 0; i < need; i++) {
-          next[`${ln.id}-${i}`] = '';
-        }
+        next[ln.id] = [];
       }
     }
-    setFulfillSlots(next);
+    setFulfillLineSelections(next);
+  };
+
+  const equipmentLabel = (e: EquipmentOpt) =>
+    `${[e.make, e.model].filter(Boolean).join(' ')}${e.equipment_number ? ` (#${e.equipment_number})` : ` · S/N ${e.serial_number}`}`;
+
+  const isEquipmentTakenInOtherLine = (equipmentId: number, lineId: number, selections: Record<number, number[]>) => {
+    for (const [lid, ids] of Object.entries(selections)) {
+      if (Number(lid) === lineId) continue;
+      if (ids.includes(equipmentId)) return true;
+    }
+    return false;
+  };
+
+  const toggleFulfillSelection = (lineId: number, equipmentId: number, max: number) => {
+    setFulfillLineSelections((prev) => {
+      const cur = prev[lineId] ?? [];
+      if (cur.includes(equipmentId)) {
+        return { ...prev, [lineId]: cur.filter((id) => id !== equipmentId) };
+      }
+      if (cur.length >= max) return prev;
+      if (isEquipmentTakenInOtherLine(equipmentId, lineId, prev)) return prev;
+      return { ...prev, [lineId]: [...cur, equipmentId] };
+    });
   };
 
   const submitFulfill = async () => {
@@ -133,11 +152,10 @@ export default function RequestQueue() {
       return;
     }
     const fulfillments: { line_id: number; equipment_id: number }[] = [];
-    for (const key of Object.keys(fulfillSlots)) {
-      const v = fulfillSlots[key];
-      if (v === '' || v === undefined) continue;
-      const lineId = parseInt(key.split('-')[0], 10);
-      fulfillments.push({ line_id: lineId, equipment_id: v as number });
+    for (const ln of fulfillFor.lines ?? []) {
+      for (const equipment_id of fulfillLineSelections[ln.id] ?? []) {
+        fulfillments.push({ line_id: ln.id, equipment_id });
+      }
     }
     if (fulfillments.length === 0) {
       alert('Select at least one equipment assignment.');
@@ -546,7 +564,7 @@ export default function RequestQueue() {
             top: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 101,
-            width: 'min(560px, calc(100vw - 2rem))',
+            width: 'min(640px, calc(100vw - 2rem))',
             maxHeight: '90vh',
             overflow: 'auto',
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
@@ -554,56 +572,96 @@ export default function RequestQueue() {
         >
           <h3 className="card-title">Assign equipment</h3>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Request #{fulfillFor.id} — {fulfillFor.requester_name}. Pick available units matching each line type.
+            Request #{fulfillFor.id} — {fulfillFor.requester_name}. For each line, check up to the number still needed. You can fulfill in multiple batches; unused lines can be completed later.
           </p>
           {fulfillFor.lines.map((ln) => {
             const done = ln.fulfilled_quantity ?? 0;
             const need = Math.max(0, ln.quantity - done);
-            const options = equipment.filter((e) => e.equipment_type_id === ln.equipment_type_id && !activeSignOuts.has(e.id));
+            const selected = fulfillLineSelections[ln.id] ?? [];
+            const options = equipment
+              .filter((e) => e.equipment_type_id === ln.equipment_type_id && !activeSignOuts.has(e.id))
+              .slice()
+              .sort((a, b) => {
+                const ma = `${a.make} ${a.model}`.localeCompare(`${b.make} ${b.model}`);
+                if (ma !== 0) return ma;
+                const na = a.equipment_number ?? a.serial_number;
+                const nb = b.equipment_number ?? b.serial_number;
+                return na.localeCompare(nb);
+              });
             return (
               <div key={ln.id} style={{ marginBottom: '1.25rem' }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>
-                  {ln.equipment_type_name ?? `Type #${ln.equipment_type_id}`} — need {need} more ({done}/{ln.quantity} assigned)
+                <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                  {ln.equipment_type_name ?? `Type #${ln.equipment_type_id}`} —{' '}
+                  {need === 0 ? (
+                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>complete ({done}/{ln.quantity})</span>
+                  ) : (
+                    <>
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                        {selected.length}/{need} selected this batch
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {done}/{ln.quantity} assigned total</span>
+                    </>
+                  )}
                 </div>
-                {Array.from({ length: need }).map((_, i) => {
-                  const key = `${ln.id}-${i}`;
-                  return (
-                    <div key={key} className="form-group" style={{ marginBottom: '0.5rem' }}>
-                      <label style={{ fontSize: '0.8rem' }}>Unit {i + 1}</label>
-                      <select
-                        value={fulfillSlots[key] === '' ? '' : fulfillSlots[key]}
-                        onChange={(e) =>
-                          setFulfillSlots((prev) => ({
-                            ...prev,
-                            [key]: e.target.value ? parseInt(e.target.value, 10) : '',
-                          }))
-                        }
-                        style={{
-                          width: '100%',
-                          padding: '0.5rem',
-                          borderRadius: 6,
-                          border: '1px solid var(--border)',
-                          background: 'var(--bg-primary)',
-                          color: 'inherit',
-                        }}
-                      >
-                        <option value="">— Select equipment —</option>
-                        {options.map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {[e.make, e.model].filter(Boolean).join(' ')}
-                            {e.equipment_number ? ` (#${e.equipment_number})` : ` S/N ${e.serial_number}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
+                {need === 0 ? (
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>No more units needed for this line.</p>
+                ) : options.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--danger)' }}>
+                    No available units of this type (or all are signed out).
+                  </p>
+                ) : (
+                  <div
+                    style={{
+                      maxHeight: 'min(320px, 42vh)',
+                      overflowY: 'auto',
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      background: 'var(--bg-primary)',
+                    }}
+                  >
+                    {options.map((e) => {
+                      const checked = selected.includes(e.id);
+                      const takenElsewhere = isEquipmentTakenInOtherLine(e.id, ln.id, fulfillLineSelections);
+                      const atCap = !checked && selected.length >= need;
+                      const disabled = (!checked && atCap) || (!checked && takenElsewhere);
+                      const isPreferred = ln.preferred_equipment_id != null && ln.preferred_equipment_id === e.id;
+                      return (
+                        <label
+                          key={e.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem',
+                            padding: '0.5rem 0.65rem',
+                            borderBottom: '1px solid var(--border)',
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.45 : 1,
+                            margin: 0,
+                            fontWeight: isPreferred ? 600 : 400,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleFulfillSelection(ln.id, e.id, need)}
+                            style={{ width: '1.05rem', height: '1.05rem', flexShrink: 0 }}
+                          />
+                          <span style={{ flex: 1, minWidth: 0 }}>{equipmentLabel(e)}</span>
+                          {isPreferred && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--accent)', flexShrink: 0 }}>Preferred</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-primary" onClick={submitFulfill} disabled={actingOnId !== null}>
-              Confirm assignments
+              Fulfill selection
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => setFulfillFor(null)}>
               Cancel
