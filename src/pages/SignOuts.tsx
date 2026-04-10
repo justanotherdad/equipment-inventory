@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, LogIn, LogOut, ScanBarcode } from 'lucide-react';
 import { format } from 'date-fns';
@@ -47,6 +47,11 @@ export default function SignOuts() {
   const [editDateTo, setEditDateTo] = useState('');
   const [editSignedOutAt, setEditSignedOutAt] = useState('');
   const [savingDates, setSavingDates] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkCheckInOpen, setBulkCheckInOpen] = useState(false);
+  const [bulkSignedInBy, setBulkSignedInBy] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     const [active, all] = await Promise.all([
@@ -60,6 +65,10 @@ export default function SignOuts() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [tab]);
 
   const handleBarcodeScan = async (barcode: string) => {
     setScanError('');
@@ -78,6 +87,48 @@ export default function SignOuts() {
   };
 
   const displayList = tab === 'active' ? activeSignOuts : allSignOuts;
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allActiveSelected =
+    tab === 'active' && activeSignOuts.length > 0 && activeSignOuts.every((s) => selectedIds.has(s.id));
+  const someActiveSelected =
+    tab === 'active' && selectedIds.size > 0 && !allActiveSelected;
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = someActiveSelected;
+  }, [someActiveSelected, allActiveSelected, tab, activeSignOuts.length]);
+
+  const submitBulkCheckIn = async () => {
+    const name = bulkSignedInBy.trim();
+    if (!name) {
+      alert('Enter who is checking in the equipment.');
+      return;
+    }
+    const ids = [...selectedIds];
+    setBulkSaving(true);
+    try {
+      for (const id of ids) {
+        await api.signOuts.checkIn(id, { signed_in_by: name });
+      }
+      setBulkCheckInOpen(false);
+      setBulkSignedInBy('');
+      setSelectedIds(new Set());
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Bulk check-in failed partway through. Refresh and verify which items were checked in.');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   return (
     <div>
@@ -123,10 +174,51 @@ export default function SignOuts() {
           </button>
         </div>
 
+        {tab === 'active' && activeSignOuts.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: '0.75rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulkCheckInOpen(true)}
+            >
+              <LogIn size={16} /> Check in selected ({selectedIds.size})
+            </button>
+            {selectedIds.size > 0 && (
+              <button type="button" className="btn btn-secondary" onClick={() => setSelectedIds(new Set())}>
+                Clear selection
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="table-container">
           <table>
             <thead>
               <tr>
+                {tab === 'active' && (
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allActiveSelected}
+                      onChange={() => {
+                        if (allActiveSelected) setSelectedIds(new Set());
+                        else setSelectedIds(new Set(activeSignOuts.map((s) => s.id)));
+                      }}
+                      title="Select all"
+                      aria-label="Select all active sign-outs"
+                    />
+                  </th>
+                )}
                 <th>Equipment</th>
                 <th>Signed Out</th>
                 <th>By</th>
@@ -143,6 +235,16 @@ export default function SignOuts() {
             <tbody>
               {displayList.map((s) => (
                 <tr key={s.id}>
+                  {tab === 'active' && (
+                    <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(s.id)}
+                        onChange={() => toggleSelect(s.id)}
+                        aria-label={`Select ${s.equipment_make} ${s.equipment_model}`}
+                      />
+                    </td>
+                  )}
                   <td>
                     <Link to={`/equipment/${s.equipment_id}`} className="link">
                       {s.equipment_make} {s.equipment_model}
@@ -195,6 +297,19 @@ export default function SignOuts() {
         <div className="mobile-list">
           {displayList.map((s) => (
             <div key={s.id} className="mobile-card">
+              {tab === 'active' && (
+                <div className="mobile-card-row" style={{ alignItems: 'center' }}>
+                  <span className="mobile-card-label">Select</span>
+                  <span className="mobile-card-value" style={{ textAlign: 'right' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => toggleSelect(s.id)}
+                      aria-label={`Select ${s.equipment_make} ${s.equipment_model}`}
+                    />
+                  </span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Equipment</span>
                 <span className="mobile-card-value">
@@ -269,6 +384,45 @@ export default function SignOuts() {
             load();
           }}
         />
+      )}
+
+      {bulkCheckInOpen && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            if (!bulkSaving) setBulkCheckInOpen(false);
+          }}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3>Check in {selectedIds.size} item{selectedIds.size === 1 ? '' : 's'}</h3>
+              <button type="button" className="modal-close" onClick={() => !bulkSaving && setBulkCheckInOpen(false)}>
+                ×
+              </button>
+            </div>
+            <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              Each item will be checked in with the same &quot;Signed in by&quot; name. Optional per-item usage notes are not included—use individual Check In on a row if you need to record systems used.
+            </p>
+            <div className="form-group">
+              <label>Signed in by</label>
+              <input
+                value={bulkSignedInBy}
+                onChange={(e) => setBulkSignedInBy(e.target.value)}
+                placeholder="Name"
+                disabled={bulkSaving}
+                autoFocus
+              />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" disabled={bulkSaving} onClick={() => setBulkCheckInOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" disabled={bulkSaving || selectedIds.size === 0} onClick={submitBulkCheckIn}>
+                {bulkSaving ? 'Checking in…' : 'Check in all'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editDates && (
