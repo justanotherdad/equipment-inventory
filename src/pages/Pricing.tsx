@@ -104,7 +104,7 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link to="/login" className={`btn ${tier.highlight ? 'btn-primary' : 'btn-secondary'}`} style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}>
+            <Link to="/login?reauth=1" className={`btn ${tier.highlight ? 'btn-primary' : 'btn-secondary'}`} style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}>
               {tier.cta}
             </Link>
           </div>

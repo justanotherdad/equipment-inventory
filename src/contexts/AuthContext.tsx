@@ -104,6 +104,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
+  /** Optional idle sign-out. Set VITE_SESSION_IDLE_MINUTES=0 to disable. Default 45 minutes. */
+  useEffect(() => {
+    const raw = import.meta.env.VITE_SESSION_IDLE_MINUTES;
+    const minutes = raw === undefined || raw === '' ? 45 : parseInt(String(raw), 10);
+    if (!Number.isFinite(minutes) || minutes <= 0 || !session) return;
+
+    const ms = minutes * 60 * 1000;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const bump = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        void signOut();
+      }, ms);
+    };
+    bump();
+    window.addEventListener('mousedown', bump);
+    window.addEventListener('keydown', bump);
+    window.addEventListener('scroll', bump, { passive: true });
+    window.addEventListener('touchstart', bump, { passive: true });
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousedown', bump);
+      window.removeEventListener('keydown', bump);
+      window.removeEventListener('scroll', bump);
+      window.removeEventListener('touchstart', bump);
+    };
+  }, [session, signOut]);
+
   return (
     <AuthContext.Provider
       value={{

@@ -13,7 +13,7 @@ export default function Landing() {
           </p>
         </div>
         <div className="landing-actions">
-          <Link to="/login" className="btn btn-primary landing-btn">
+          <Link to="/login?reauth=1" className="btn btn-primary landing-btn">
             Sign in
             <ArrowRight size={18} />
           </Link>

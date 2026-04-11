@@ -1,12 +1,32 @@
-import { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Navigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BrandLogo } from '../components/BrandLogo';
 import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
-  const { signIn, signUp, error, loading, profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { signIn, signUp, error, loading, profile, signOut } = useAuth();
+  const reauthRequested = searchParams.get('reauth') === '1';
+
+  /** Public pages link with ?reauth=1 so a stored Supabase session is cleared before showing the sign-in form. */
+  useEffect(() => {
+    if (!reauthRequested || !supabase) return;
+    if (!profile) {
+      setSearchParams(
+        (p) => {
+          const n = new URLSearchParams(p);
+          n.delete('reauth');
+          return n;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    void signOut();
+  }, [reauthRequested, profile, signOut, setSearchParams]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +66,17 @@ export default function Login() {
     }
   };
 
-  if (profile) return <Navigate to="/dashboard" replace />;
+  if (profile && !reauthRequested) return <Navigate to="/dashboard" replace />;
+
+  if (reauthRequested && profile) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <p style={{ color: 'var(--text-muted)' }}>Signing out…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!supabase) {
     return (
