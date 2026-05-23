@@ -16,6 +16,7 @@ const PORT = parseInt(process.env.PORT ?? '', 10) || 3000;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || 'calibration-records';
+const imagesBucket = process.env.SUPABASE_IMAGES_BUCKET || 'equipment-images';
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY. Set these environment variables.');
@@ -60,6 +61,16 @@ const upload = multer({
     else cb(new Error('Only PDF files are allowed'));
   },
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
+// Multer for equipment image uploads
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'));
+  },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 app.use(cors());
@@ -223,6 +234,66 @@ app.delete('/api/equipment/:id', async (req, res) => {
   }
 });
 
+// Equipment image routes
+app.post('/api/equipment/:id/image', uploadImage.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
+    const equipmentId = parseInt(req.params.id, 10);
+    const eq = await db.getEquipmentById(equipmentId, req.profile);
+    if (!eq) return res.status(404).json({ error: 'Equipment not found' });
+
+    // Delete old image if exists
+    if (eq.image_path) {
+      await supabase.storage.from(imagesBucket).remove([eq.image_path]);
+    }
+
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const imagePath = `${equipmentId}/${Date.now()}${ext}`;
+    const { error: uploadErr } = await supabase.storage
+      .from(imagesBucket)
+      .upload(imagePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
+    if (uploadErr) throw uploadErr;
+
+    await db.updateEquipment(equipmentId, { image_path: imagePath });
+    res.status(201).json({ ok: true, image_path: imagePath });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.delete('/api/equipment/:id/image', async (req, res) => {
+  try {
+    const equipmentId = parseInt(req.params.id, 10);
+    const eq = await db.getEquipmentById(equipmentId, req.profile);
+    if (!eq) return res.status(404).json({ error: 'Equipment not found' });
+    if (eq.image_path) {
+      await supabase.storage.from(imagesBucket).remove([eq.image_path]);
+    }
+    await db.updateEquipment(equipmentId, { image_path: null });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+app.get('/api/equipment/:id/image-url', async (req, res) => {
+  try {
+    const equipmentId = parseInt(req.params.id, 10);
+    const eq = await db.getEquipmentById(equipmentId, req.profile);
+    if (!eq || !eq.image_path) return res.json({ url: null });
+    const { data, error } = await supabase.storage
+      .from(imagesBucket)
+      .createSignedUrl(eq.image_path, 3600); // 1hr expiry
+    if (error || !data?.signedUrl) return res.json({ url: null });
+    res.json({ url: data.signedUrl });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.get('/api/sign-outs', async (req, res) => {
   try {
     const data = await db.getAllSignOuts(req.profile);
@@ -340,7 +411,8 @@ app.put('/api/sign-outs/:id', async (req, res) => {
 
 app.post('/api/sign-outs/:id/check-in', async (req, res) => {
   try {
-    await db.checkInSignOut(parseInt(req.params.id, 10), req.body);
+    const { signed_in_by, cal_date, due_date } = req.body as { signed_in_by: string; cal_date?: string | null; due_date?: string | null };
+    await db.checkInSignOut(parseInt(req.params.id, 10), { signed_in_by, cal_date: cal_date ?? null, due_date: due_date ?? null });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

@@ -21,6 +21,8 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [activeSignOuts, setActiveSignOuts] = useState<Set<number>>(new Set());
   const [equipmentId, setEquipmentId] = useState(preSelectedEquipmentId ?? 0);
+  const [signOutType, setSignOutType] = useState<'field_use' | 'calibration'>('field_use');
+  const [calVendor, setCalVendor] = useState('');
   const [signedOutBy, setSignedOutBy] = useState('');
   const [purpose, setPurpose] = useState('');
   const [usageItems, setUsageItems] = useState<string[]>(['']);
@@ -64,13 +66,17 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
       const result = await api.signOuts.create({
         equipment_id: equipmentId,
         signed_out_by: signedOutBy.trim(),
-        purpose: purpose.trim() || undefined,
+        purpose: signOutType === 'field_use' ? (purpose.trim() || undefined) : undefined,
+        sign_out_type: signOutType,
+        cal_vendor: signOutType === 'calibration' ? (calVendor.trim() || null) : null,
       });
       const signOutId = (result as { id: number }).id;
-      for (const sys of usageItems) {
-        const trimmed = sys.trim();
-        if (trimmed) {
-          await api.usage.add({ sign_out_id: signOutId, system_equipment: trimmed });
+      if (signOutType === 'field_use') {
+        for (const sys of usageItems) {
+          const trimmed = sys.trim();
+          if (trimmed) {
+            await api.usage.add({ sign_out_id: signOutId, system_equipment: trimmed });
+          }
         }
       }
       onSaved();
@@ -89,6 +95,29 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
+          {/* Sign-out type selector */}
+          <div className="form-group">
+            <label>Sign-out Reason</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className={`btn ${signOutType === 'field_use' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1 }}
+                onClick={() => setSignOutType('field_use')}
+              >
+                Field Use
+              </button>
+              <button
+                type="button"
+                className={`btn ${signOutType === 'calibration' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ flex: 1 }}
+                onClick={() => setSignOutType('calibration')}
+              >
+                Calibration
+              </button>
+            </div>
+          </div>
+
           <div className="form-group">
             <label>Equipment</label>
             <select
@@ -115,58 +144,63 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
             <label>Signed Out By</label>
             <input value={signedOutBy} onChange={(e) => setSignedOutBy(e.target.value)} required placeholder="Name" />
           </div>
-          <div className="form-group">
-            <label>Purpose (optional)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-              <button
-                type="button"
-                className={`btn ${purpose === 'Calibration' ? 'btn-primary' : 'btn-outline'}`}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-                onClick={() => setPurpose('Calibration')}
-              >
-                Calibration
-              </button>
-              <button
-                type="button"
-                className={`btn ${purpose === 'Field mapping' ? 'btn-primary' : 'btn-outline'}`}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-                onClick={() => setPurpose('Field mapping')}
-              >
-                Field mapping
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline"
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-                onClick={() => setPurpose('')}
-              >
-                Clear
-              </button>
+
+          {signOutType === 'calibration' && (
+            <div className="form-group">
+              <label>Vendor / Lab (optional)</label>
+              <input value={calVendor} onChange={(e) => setCalVendor(e.target.value)} placeholder="e.g. Acme Calibration Lab" />
             </div>
-            <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Field mapping for Unit #5" />
-          </div>
-          <div className="form-group">
-            <label>Used On / Systems (optional)</label>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              Systems or equipment this item will be used to map/test
-            </p>
-            {usageItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <input
-                  value={item}
-                  onChange={(e) => updateUsage(i, e.target.value)}
-                  placeholder="e.g. Temperature Chamber Unit #12"
-                  style={{ flex: 1 }}
-                />
-                <button type="button" className="btn btn-secondary" onClick={() => removeUsage(i)} disabled={usageItems.length === 1}>
-                  <X size={16} />
+          )}
+
+          {signOutType === 'field_use' && (
+            <>
+              <div className="form-group">
+                <label>Purpose (optional)</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className={`btn ${purpose === 'Field mapping' ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                    onClick={() => setPurpose('Field mapping')}
+                  >
+                    Field mapping
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                    onClick={() => setPurpose('')}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Field mapping for Unit #5" />
+              </div>
+              <div className="form-group">
+                <label>Used On / Systems (optional)</label>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  Systems or equipment this item will be used to map/test
+                </p>
+                {usageItems.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <input
+                      value={item}
+                      onChange={(e) => updateUsage(i, e.target.value)}
+                      placeholder="e.g. Temperature Chamber Unit #12"
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" className="btn btn-secondary" onClick={() => removeUsage(i)} disabled={usageItems.length === 1}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-secondary" style={{ marginTop: '0.5rem' }} onClick={addUsage}>
+                  <Plus size={16} /> Add system
                 </button>
               </div>
-            ))}
-            <button type="button" className="btn btn-secondary" style={{ marginTop: '0.5rem' }} onClick={addUsage}>
-              <Plus size={16} /> Add system
-            </button>
-          </div>
+            </>
+          )}
+
           {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

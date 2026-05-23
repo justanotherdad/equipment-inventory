@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle, Clock, ArrowUpDown } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, ArrowUpDown, Wrench } from 'lucide-react';
 import { api } from '../api';
 
 interface CalStatus {
@@ -12,8 +12,9 @@ interface CalStatus {
   serial_number: string;
   last_calibration_date: string | null;
   next_calibration_due: string | null;
-  status: 'due' | 'due_soon' | 'ok' | 'n/a';
+  status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal';
   days_until_due: number | null;
+  cal_vendor?: string | null;
 }
 
 type SortKey = 'status' | 'equipment_type_name' | 'equipment' | 'serial_number' | 'last_calibration_date' | 'next_calibration_due';
@@ -26,11 +27,11 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'last_calibration_date', label: 'Last Calibration' },
 ];
 
-const STATUS_ORDER = { due: 0, due_soon: 1, ok: 2, 'n/a': 3 };
+const STATUS_ORDER = { due: 0, due_soon: 1, ok: 2, 'n/a': 3, out_for_cal: 4 };
 
 export default function CalibrationStatus() {
   const [items, setItems] = useState<CalStatus[]>([]);
-  const [filter, setFilter] = useState<'all' | 'due' | 'due_soon' | 'ok' | 'n/a'>('all');
+  const [filter, setFilter] = useState<'all' | 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('next_calibration_due');
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -83,6 +84,7 @@ export default function CalibrationStatus() {
     due_soon: items.filter((i) => i.status === 'due_soon').length,
     ok: items.filter((i) => i.status === 'ok').length,
     n_a: items.filter((i) => i.status === 'n/a').length,
+    out_for_cal: items.filter((i) => i.status === 'out_for_cal').length,
   };
 
   const statusBadge = (s: CalStatus) => {
@@ -93,6 +95,8 @@ export default function CalibrationStatus() {
         return <span className="badge badge-due-soon"><Clock size={12} /> {s.days_until_due} days</span>;
       case 'ok':
         return <span className="badge badge-ok"><CheckCircle size={12} /> OK</span>;
+      case 'out_for_cal':
+        return <span className="badge" style={{ background: 'var(--info, #6366f1)', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Wrench size={12} /> Out for Cal{s.cal_vendor ? ` · ${s.cal_vendor}` : ''}</span>;
       default:
         return <span className="badge badge-na">N/A</span>;
     }
@@ -136,6 +140,12 @@ export default function CalibrationStatus() {
             onClick={() => setFilter('n/a')}
           >
             N/A ({counts.n_a})
+          </button>
+          <button
+            className={`btn ${filter === 'out_for_cal' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setFilter('out_for_cal')}
+          >
+            Out for Cal ({counts.out_for_cal})
           </button>
         </div>
 

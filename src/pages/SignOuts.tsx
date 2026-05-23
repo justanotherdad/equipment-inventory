@@ -9,6 +9,15 @@ import BarcodeScanInput from '../components/BarcodeScanInput';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setMonth(d.getMonth() + months);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${dy}`;
+}
+
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -27,6 +36,8 @@ interface SignOut {
   signed_in_by: string | null;
   signed_in_at: string | null;
   purpose: string | null;
+  sign_out_type?: 'field_use' | 'calibration' | null;
+  cal_frequency_months?: number | null;
   date_from?: string | null;
   date_to?: string | null;
 }
@@ -50,6 +61,9 @@ export default function SignOuts() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [bulkCheckInOpen, setBulkCheckInOpen] = useState(false);
   const [bulkSignedInBy, setBulkSignedInBy] = useState('');
+  const [bulkCalDate, setBulkCalDate] = useState('');
+  const [bulkDueDate, setBulkDueDate] = useState('');
+  const [bulkDueDateManual, setBulkDueDateManual] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +121,13 @@ export default function SignOuts() {
     if (el) el.indeterminate = someActiveSelected;
   }, [someActiveSelected, allActiveSelected, tab, activeSignOuts.length]);
 
+  const selectedCalItems = activeSignOuts.filter(
+    (s) => selectedIds.has(s.id) && s.sign_out_type === 'calibration'
+  );
+  const allSelectedAreCal =
+    selectedIds.size > 0 && selectedCalItems.length === selectedIds.size;
+  const someSelectedAreCal = selectedCalItems.length > 0;
+
   const submitBulkCheckIn = async () => {
     const name = bulkSignedInBy.trim();
     if (!name) {
@@ -117,10 +138,19 @@ export default function SignOuts() {
     setBulkSaving(true);
     try {
       for (const id of ids) {
-        await api.signOuts.checkIn(id, { signed_in_by: name });
+        const so = activeSignOuts.find((s) => s.id === id);
+        const isCal = so?.sign_out_type === 'calibration';
+        await api.signOuts.checkIn(id, {
+          signed_in_by: name,
+          cal_date: isCal && bulkCalDate ? bulkCalDate : null,
+          due_date: isCal && bulkDueDate ? bulkDueDate : null,
+        });
       }
       setBulkCheckInOpen(false);
       setBulkSignedInBy('');
+      setBulkCalDate('');
+      setBulkDueDate('');
+      setBulkDueDateManual(false);
       setSelectedIds(new Set());
       await load();
     } catch (err) {
@@ -377,7 +407,11 @@ export default function SignOuts() {
 
       {checkInSignOut && (
         <CheckInModal
-          signOut={checkInSignOut}
+          signOut={{
+            ...checkInSignOut,
+            sign_out_type: checkInSignOut.sign_out_type ?? 'field_use',
+            cal_frequency_months: checkInSignOut.cal_frequency_months ?? null,
+          }}
           onClose={() => setCheckInSignOut(null)}
           onSaved={() => {
             setCheckInSignOut(null);
@@ -401,7 +435,8 @@ export default function SignOuts() {
               </button>
             </div>
             <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              Each item will be checked in with the same &quot;Signed in by&quot; name. Optional per-item usage notes are not included—use individual Check In on a row if you need to record systems used.
+              Each item will be checked in with the same &quot;Signed in by&quot; name.
+              {someSelectedAreCal && !allSelectedAreCal && ' Calibration dates below apply to calibration items only.'}
             </p>
             <div className="form-group">
               <label>Signed in by</label>
@@ -413,6 +448,42 @@ export default function SignOuts() {
                 autoFocus
               />
             </div>
+            {someSelectedAreCal && (
+              <>
+                <div className="form-group">
+                  <label>Calibration Date{!allSelectedAreCal ? ' (cal items only)' : ''}</label>
+                  <input
+                    type="date"
+                    value={bulkCalDate}
+                    onChange={(e) => {
+                      setBulkCalDate(e.target.value);
+                      if (!bulkDueDateManual && e.target.value) {
+                        // Use median frequency among selected cal items, or first found
+                        const freq = selectedCalItems[0]?.cal_frequency_months;
+                        if (freq) setBulkDueDate(addMonths(e.target.value, freq));
+                      }
+                    }}
+                    disabled={bulkSaving}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Next Calibration Due{!allSelectedAreCal ? ' (cal items only)' : ''}</label>
+                  {!bulkDueDateManual && bulkCalDate && selectedCalItems[0]?.cal_frequency_months && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                      Auto-calculated — edit to override
+                    </p>
+                  )}
+                  <input
+                    type="date"
+                    value={bulkDueDate}
+                    onChange={(e) => { setBulkDueDate(e.target.value); setBulkDueDateManual(true); }}
+                    disabled={bulkSaving}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </>
+            )}
             <div className="modal-actions">
               <button type="button" className="btn btn-secondary" disabled={bulkSaving} onClick={() => setBulkCheckInOpen(false)}>
                 Cancel

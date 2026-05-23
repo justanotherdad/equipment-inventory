@@ -26,6 +26,8 @@ export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
   const [scanned, setScanned] = useState<ScannedItem[]>([]);
   const [scanError, setScanError] = useState('');
   const [sites, setSites] = useState<Site[]>([]);
+  const [signOutType, setSignOutType] = useState<'field_use' | 'calibration'>('field_use');
+  const [calVendor, setCalVendor] = useState('');
   const [siteId, setSiteId] = useState<string>('');
   const [building, setBuilding] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -87,12 +89,14 @@ export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
     try {
       await api.checkouts.create({
         equipment_ids: scanned.map((s) => s.id),
-        site_id: siteId ? parseInt(siteId, 10) : null,
-        building: building.trim() || null,
-        room_number: roomNumber.trim() || null,
-        equipment_number_to_test: equipmentNumber.trim() || null,
+        site_id: signOutType === 'field_use' && siteId ? parseInt(siteId, 10) : null,
+        building: signOutType === 'field_use' ? (building.trim() || null) : null,
+        room_number: signOutType === 'field_use' ? (roomNumber.trim() || null) : null,
+        equipment_number_to_test: signOutType === 'field_use' ? (equipmentNumber.trim() || null) : null,
         signed_out_by: signedOutBy.trim(),
-        purpose: purpose.trim() || null,
+        purpose: signOutType === 'field_use' ? (purpose.trim() || null) : null,
+        sign_out_type: signOutType,
+        cal_vendor: signOutType === 'calibration' ? (calVendor.trim() || null) : null,
       });
       onSaved();
     } catch (err) {
@@ -112,6 +116,29 @@ export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
           Scan equipment barcodes (1 or many), then add the checkout details below.
         </p>
+
+        {/* Reason selector */}
+        <div className="form-group" style={{ marginBottom: '1rem' }}>
+          <label>Sign-out Reason</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className={`btn ${signOutType === 'field_use' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1 }}
+              onClick={() => setSignOutType('field_use')}
+            >
+              Field Use
+            </button>
+            <button
+              type="button"
+              className={`btn ${signOutType === 'calibration' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1 }}
+              onClick={() => setSignOutType('calibration')}
+            >
+              Calibration
+            </button>
+          </div>
+        </div>
 
         <div className="form-group" style={{ marginBottom: '1rem' }}>
           <label>Scan Barcode</label>
@@ -149,57 +176,74 @@ export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
               style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
             />
           </div>
-          {sites.length > 0 && (
+
+          {signOutType === 'calibration' && (
             <div className="form-group">
-              <label>Site</label>
-              <select
-                value={siteId}
-                onChange={(e) => setSiteId(e.target.value)}
+              <label>Vendor / Lab (optional)</label>
+              <input
+                value={calVendor}
+                onChange={(e) => setCalVendor(e.target.value)}
+                placeholder="e.g. Acme Calibration Lab"
                 style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-              >
-                <option value="">— Select site —</option>
-                {sites.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              />
             </div>
           )}
-          <div className="form-group">
-            <label>Building</label>
-            <input
-              value={building}
-              onChange={(e) => setBuilding(e.target.value)}
-              placeholder="Building name or number"
-              style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-            />
-          </div>
-          <div className="form-group">
-            <label>Room Number</label>
-            <input
-              value={roomNumber}
-              onChange={(e) => setRoomNumber(e.target.value)}
-              placeholder="Room or location"
-              style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-            />
-          </div>
-          <div className="form-group">
-            <label>Equipment Number (to test)</label>
-            <input
-              value={equipmentNumber}
-              onChange={(e) => setEquipmentNumber(e.target.value)}
-              placeholder="Equipment # at the site"
-              style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-            />
-          </div>
-          <div className="form-group">
-            <label>Purpose (optional)</label>
-            <input
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              placeholder="e.g. Field mapping, calibration"
-              style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
-            />
-          </div>
+
+          {signOutType === 'field_use' && (
+            <>
+              {sites.length > 0 && (
+                <div className="form-group">
+                  <label>Site</label>
+                  <select
+                    value={siteId}
+                    onChange={(e) => setSiteId(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                  >
+                    <option value="">— Select site —</option>
+                    {sites.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="form-group">
+                <label>Building</label>
+                <input
+                  value={building}
+                  onChange={(e) => setBuilding(e.target.value)}
+                  placeholder="Building name or number"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Room Number</label>
+                <input
+                  value={roomNumber}
+                  onChange={(e) => setRoomNumber(e.target.value)}
+                  placeholder="Room or location"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Equipment Number (to test)</label>
+                <input
+                  value={equipmentNumber}
+                  onChange={(e) => setEquipmentNumber(e.target.value)}
+                  placeholder="Equipment # at the site"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Purpose (optional)</label>
+                <input
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  placeholder="e.g. Field mapping"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                />
+              </div>
+            </>
+          )}
           {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

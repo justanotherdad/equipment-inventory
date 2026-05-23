@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, FileText, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, Edit, FileText, Plus, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import EquipmentModal from '../components/EquipmentModal';
 import { api } from '../api';
@@ -8,6 +8,7 @@ import { api } from '../api';
 interface Equipment {
   id: number;
   equipment_type_name: string;
+  calibration_frequency_months?: number | null;
   department_name?: string | null;
   site_name?: string | null;
   make: string;
@@ -17,6 +18,7 @@ interface Equipment {
   last_calibration_date: string | null;
   next_calibration_due: string | null;
   notes: string | null;
+  image_path?: string | null;
 }
 
 interface SignOut {
@@ -159,6 +161,21 @@ export default function EquipmentDetail() {
   const [addingPdf, setAddingPdf] = useState(false);
   const [addCalDate, setAddCalDate] = useState('');
   const [addDueDate, setAddDueDate] = useState('');
+  // Image state
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageHover, setImageHover] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const loadImage = async (eqId: number) => {
+    try {
+      const { url } = await api.equipment.getImageUrl(eqId);
+      setImageUrl(url);
+    } catch {
+      setImageUrl(null);
+    }
+  };
 
   const load = async () => {
     if (!equipmentId) return;
@@ -167,7 +184,8 @@ export default function EquipmentDetail() {
       api.signOuts.getByEquipment(equipmentId),
       api.calibrationRecords.getByEquipment(equipmentId),
     ]);
-    setEquipment(eq ?? null);
+    const eqData = eq as Equipment | null ?? null;
+    setEquipment(eqData);
     setSignOuts(so);
     setCalRecords(cr);
     const usages: Record<number, Usage[]> = {};
@@ -175,6 +193,11 @@ export default function EquipmentDetail() {
       usages[s.id] = await api.usage.getBySignOut(s.id);
     }
     setUsagesBySignOut(usages);
+    if (eqData?.image_path) {
+      loadImage(equipmentId);
+    } else {
+      setImageUrl(null);
+    }
   };
 
   useEffect(() => {
@@ -213,6 +236,31 @@ export default function EquipmentDetail() {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!equipmentId || uploadingImage || !file) return;
+    setUploadingImage(true);
+    try {
+      await api.equipment.uploadImage(equipmentId, file);
+      await loadImage(equipmentId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!confirm('Remove this equipment image?')) return;
+    try {
+      await api.equipment.deleteImage(equipmentId);
+      setImageUrl(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove image');
+    }
+  };
+
   const handleDeleteEquipment = async () => {
     if (!confirm('Delete this equipment? This cannot be undone.')) return;
     try {
@@ -247,52 +295,87 @@ export default function EquipmentDetail() {
 
       <div className="card">
         <h3 className="card-title">Details</h3>
-        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Type</div>
-            <div>{equipment.equipment_type_name}</div>
-          </div>
-          {(equipment.site_name || equipment.department_name) && (
-            <>
-              {equipment.site_name && (
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Site</div>
-                  <div>{equipment.site_name}</div>
-                </div>
-              )}
-              {equipment.department_name && (
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Department</div>
-                  <div>{equipment.department_name}</div>
-                </div>
-              )}
-            </>
-          )}
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Make</div>
-            <div>{equipment.make}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Model</div>
-            <div>{equipment.model}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Serial Number</div>
-            <div>{equipment.serial_number}</div>
-          </div>
-          {equipment.equipment_number && (
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* Fields grid */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', flex: '1 1 0', minWidth: 0 }}>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Number</div>
-              <div>#{equipment.equipment_number}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Type</div>
+              <div>{equipment.equipment_type_name}</div>
             </div>
-          )}
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Last Calibration</div>
-            <div>{equipment.last_calibration_date ? format(new Date(equipment.last_calibration_date), 'MMM d, yyyy') : '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Next Cal Due</div>
-            <div>{equipment.next_calibration_due ? format(new Date(equipment.next_calibration_due), 'MMM d, yyyy') : '—'}</div>
+            {(equipment.site_name || equipment.department_name) && (
+              <>
+                {equipment.site_name && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Site</div>
+                    <div>{equipment.site_name}</div>
+                  </div>
+                )}
+                {equipment.department_name && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Department</div>
+                    <div>{equipment.department_name}</div>
+                  </div>
+                )}
+              </>
+            )}
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Make</div>
+              <div>{equipment.make}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Model</div>
+              <div>{equipment.model}</div>
+            </div>
+            {/* Image zone — sits to the right of Model */}
+            <div
+              style={{ position: 'relative', width: 120, height: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', cursor: imageUrl ? 'zoom-in' : 'pointer', flexShrink: 0, alignSelf: 'flex-start' }}
+              onMouseEnter={() => setImageHover(true)}
+              onMouseLeave={() => setImageHover(false)}
+              onClick={() => { if (imageUrl) setLightboxOpen(true); }}
+            >
+              {imageUrl ? (
+                <img src={imageUrl} alt="Equipment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+                  <img src="/Logo.png" alt="No image" style={{ width: 64, height: 64, objectFit: 'contain', opacity: 0.2, filter: 'grayscale(100%)' }} />
+                </div>
+              )}
+              {/* Hover overlay — edit action */}
+              {imageHover && (
+                <div
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', padding: '0.35rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <label style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer', color: '#fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Camera size={13} /> {imageUrl ? 'Change' : 'Upload'}
+                    <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} style={{ display: 'none' }} />
+                  </label>
+                  {imageUrl && (
+                    <button type="button" onClick={handleDeleteImage} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', padding: 0 }}>
+                      <X size={13} /> Remove
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Serial Number</div>
+              <div>{equipment.serial_number}</div>
+            </div>
+            {equipment.equipment_number && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Number</div>
+                <div>#{equipment.equipment_number}</div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Last Calibration</div>
+              <div>{equipment.last_calibration_date ? format(new Date(equipment.last_calibration_date), 'MMM d, yyyy') : '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Next Cal Due</div>
+              <div>{equipment.next_calibration_due ? format(new Date(equipment.next_calibration_due), 'MMM d, yyyy') : '—'}</div>
+            </div>
           </div>
         </div>
         {equipment.notes && (
@@ -302,6 +385,19 @@ export default function EquipmentDetail() {
           </div>
         )}
       </div>
+
+      {/* Image lightbox */}
+      {lightboxOpen && imageUrl && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button type="button" onClick={() => setLightboxOpen(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
+            <X size={28} />
+          </button>
+          <img src={imageUrl} alt="Equipment" style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8 }} onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
 
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>

@@ -112,6 +112,13 @@ export const api = {
     update: (id: number, data: object) => request(`/api/equipment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     bulkUpdate: (ids: number[], data: object) => request('/api/equipment/bulk', { method: 'PUT', body: JSON.stringify({ ids, ...data }) }),
     delete: (id: number) => request(`/api/equipment/${id}`, { method: 'DELETE' }),
+    uploadImage: async (id: number, file: File): Promise<{ image_path: string }> => {
+      const form = new FormData();
+      form.append('image', file);
+      return request(`/api/equipment/${id}/image`, { method: 'POST', body: form });
+    },
+    deleteImage: (id: number) => request(`/api/equipment/${id}/image`, { method: 'DELETE' }),
+    getImageUrl: (id: number) => request<{ url: string | null }>(`/api/equipment/${id}/image-url`),
   },
   signOuts: {
     getAll: () => request('/api/sign-outs'),
@@ -123,7 +130,7 @@ export const api = {
     create: (data: object) => request('/api/sign-outs', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: { signed_out_at?: string; date_from?: string | null; date_to?: string | null }) =>
       request(`/api/sign-outs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    checkIn: (id: number, data: { signed_in_by: string }) =>
+    checkIn: (id: number, data: { signed_in_by: string; cal_date?: string | null; due_date?: string | null }) =>
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
   },
   notifications: {
@@ -147,7 +154,7 @@ export const api = {
           site_name: string | null;
           building: string | null;
           room_number: string | null;
-          equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+          equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null; equipment_type_name?: string | null }>;
           usage_equipment: string[];
         }>;
       }>(`/api/equipment-tested/${encodeURIComponent(equipmentNumber)}`),
@@ -164,6 +171,8 @@ export const api = {
       equipment_number_to_test?: string | null;
       signed_out_by: string;
       purpose?: string | null;
+      sign_out_type?: 'field_use' | 'calibration';
+      cal_vendor?: string | null;
     }) => request<{ checkout_id: number; sign_out_ids: number[] }>('/api/checkouts', { method: 'POST', body: JSON.stringify(data) }),
   },
   calibrationRecords: {

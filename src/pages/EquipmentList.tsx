@@ -34,6 +34,7 @@ interface SignOutRecord {
   signed_out_at: string;
   signed_in_at: string | null;
   purpose: string | null;
+  sign_out_type?: 'field_use' | 'calibration' | null;
   date_from?: string | null;
   date_to?: string | null;
 }
@@ -76,14 +77,15 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 const STATUS_LABELS: Record<EquipmentStatus, string> = {
   available: 'Available',
   checked_out: 'In-Use',
-  out_for_calibration: 'Out-of-Service',
+  out_for_calibration: 'Out for Cal',
 };
 
 function getStatusForEquipment(equipmentId: number, activeSignOuts: SignOutRecord[]): EquipmentStatus {
   const so = activeSignOuts.find((s) => s.equipment_id === equipmentId);
   if (!so) return 'available';
-  const purpose = (so.purpose ?? '').toLowerCase();
-  if (purpose.includes('calibration')) return 'out_for_calibration';
+  // Prefer sign_out_type field; fall back to purpose text for legacy records
+  if (so.sign_out_type === 'calibration') return 'out_for_calibration';
+  if (!so.sign_out_type && (so.purpose ?? '').toLowerCase().includes('calibration')) return 'out_for_calibration';
   return 'checked_out';
 }
 
@@ -373,8 +375,9 @@ export default function EquipmentList() {
     const dateStr = `${heatMapMonth.year}-${String(heatMapMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const so = signOutsInMonth.find((s) => s.equipment_id === equipmentId && signOutCoversDay(s, dateStr));
     if (!so) return 'available';
-    const purpose = (so.purpose ?? '').toLowerCase();
-    if (purpose.includes('calibration')) return 'out_for_calibration';
+    // Prefer sign_out_type field; fall back to purpose text for legacy records
+    if (so.sign_out_type === 'calibration') return 'out_for_calibration';
+    if (!so.sign_out_type && (so.purpose ?? '').toLowerCase().includes('calibration')) return 'out_for_calibration';
     return 'checked_out';
   };
 
@@ -707,7 +710,7 @@ export default function EquipmentList() {
           <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-available)', marginRight: 4 }} /> Available</span>
             <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-in-use)', marginRight: 4 }} /> In-Use</span>
-            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-out-of-service)', marginRight: 4 }} /> Out-of-Service</span>
+            <span><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: 'var(--equipment-status-out-of-service)', marginRight: 4 }} /> Out for Cal</span>
           </div>
         </div>
         <div style={{ width: '100%', overflowX: 'auto' }}>

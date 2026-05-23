@@ -22,6 +22,7 @@ export interface Equipment {
   id: number;
   equipment_type_id: number;
   equipment_type_name?: string;
+  calibration_frequency_months?: number | null;
   department_id?: number | null;
   department_name?: string | null;
   site_name?: string | null;
@@ -33,6 +34,7 @@ export interface Equipment {
   last_calibration_date: string | null;
   next_calibration_due: string | null;
   notes: string | null;
+  image_path: string | null;
   created_at: string;
 }
 
@@ -47,6 +49,8 @@ export interface SignOut {
   signed_in_by: string | null;
   signed_in_at: string | null;
   purpose: string | null;
+  sign_out_type: 'field_use' | 'calibration';
+  cal_vendor: string | null;
   created_at: string;
   date_from?: string | null;
   date_to?: string | null;
@@ -664,7 +668,7 @@ export class Database {
       .from('equipment')
       .select(`
         *,
-        equipment_types(name),
+        equipment_types(name, calibration_frequency_months),
         departments(name, sites(name, companies(name)))
       `)
       .order('make')
@@ -708,7 +712,8 @@ export class Database {
       const companyName = dept?.sites?.companies?.name ?? null;
       return {
         ...r,
-        equipment_type_name: (r.equipment_types as { name: string })?.name,
+        equipment_type_name: (r.equipment_types as { name: string; calibration_frequency_months?: number | null })?.name,
+        calibration_frequency_months: (r.equipment_types as { name: string; calibration_frequency_months?: number | null })?.calibration_frequency_months ?? null,
         department_name: dept?.name ?? null,
         site_name: dept?.sites?.name ?? null,
         company_name: companyName,
@@ -728,7 +733,7 @@ export class Database {
       .from('equipment')
       .select(`
         *,
-        equipment_types(name),
+        equipment_types(name, calibration_frequency_months),
         departments(name, sites(name, company_id))
       `)
       .eq('id', id)
@@ -754,9 +759,11 @@ export class Database {
     }
 
     const dept = data.departments as { name?: string; sites?: { name: string } } | null;
+    const etypes = data.equipment_types as { name: string; calibration_frequency_months?: number | null } | null;
     return {
       ...data,
-      equipment_type_name: (data.equipment_types as { name: string })?.name,
+      equipment_type_name: etypes?.name,
+      calibration_frequency_months: etypes?.calibration_frequency_months ?? null,
       department_name: dept?.name ?? null,
       site_name: dept?.sites?.name ?? null,
       equipment_types: undefined,
@@ -828,6 +835,7 @@ export class Database {
     last_calibration_date?: string | null;
     next_calibration_due?: string | null;
     notes?: string | null;
+    image_path?: string | null;
   }): Promise<number> {
     const { data: inserted, error } = await this.supabase
       .from('equipment')
@@ -841,6 +849,7 @@ export class Database {
         last_calibration_date: data.last_calibration_date ?? null,
         next_calibration_due: data.next_calibration_due ?? null,
         notes: data.notes ?? null,
+        image_path: data.image_path ?? null,
       })
       .select('id')
       .single();
@@ -910,6 +919,7 @@ export class Database {
     last_calibration_date: string | null;
     next_calibration_due: string | null;
     notes: string | null;
+    image_path: string | null;
   }>) {
     const { data: existing, error: fetchErr } = await this.supabase
       .from('equipment')
@@ -929,6 +939,7 @@ export class Database {
         last_calibration_date: data.last_calibration_date !== undefined ? data.last_calibration_date : existing.last_calibration_date,
         next_calibration_due: data.next_calibration_due !== undefined ? data.next_calibration_due : existing.next_calibration_due,
         notes: data.notes !== undefined ? data.notes : existing.notes,
+        image_path: data.image_path !== undefined ? data.image_path : existing.image_path,
       })
       .eq('id', id);
     if (error) throw error;
@@ -953,10 +964,23 @@ export class Database {
     if (error) throw error;
   }
 
-  async getCalibrationStatus(profile?: Profile): Promise<Array<Equipment & { status: 'due' | 'due_soon' | 'ok' | 'n/a'; days_until_due: number | null }>> {
+  async getCalibrationStatus(profile?: Profile): Promise<Array<Equipment & { status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'; days_until_due: number | null; cal_vendor?: string | null }>> {
     const equipment = await this.getAllEquipment(profile);
+    // Fetch active calibration sign-outs so we can mark equipment accordingly
+    const { data: calSignOuts } = await this.supabase
+      .from('sign_outs')
+      .select('equipment_id, cal_vendor')
+      .eq('sign_out_type', 'calibration')
+      .is('signed_in_at', null);
+    const calMap = new Map<number, string | null>();
+    for (const so of calSignOuts ?? []) {
+      calMap.set(so.equipment_id as number, (so.cal_vendor as string | null) ?? null);
+    }
     const today = new Date();
     return equipment.map((e) => {
+      if (calMap.has(e.id)) {
+        return { ...e, status: 'out_for_cal' as const, days_until_due: null, cal_vendor: calMap.get(e.id) ?? null };
+      }
       if (!e.next_calibration_due) {
         return { ...e, status: 'n/a' as const, days_until_due: null };
       }
@@ -974,6 +998,8 @@ export class Database {
       .from('sign_outs')
       .select(`
         *,
+        sign_out_type,
+        cal_vendor,
         equipment(make, model, serial_number, equipment_number, department_id)
       `)
       .order('signed_out_at', { ascending: false });
@@ -1052,6 +1078,8 @@ export class Database {
     equipment_id: number;
     signed_out_by: string;
     purpose?: string;
+    sign_out_type?: 'field_use' | 'calibration';
+    cal_vendor?: string | null;
     equipment_request_id?: number;
     equipment_request_line_id?: number;
     building?: string;
@@ -1067,6 +1095,8 @@ export class Database {
       signed_out_by: data.signed_out_by,
       signed_out_at: data.signed_out_at ?? new Date().toISOString(),
       purpose: data.purpose ?? null,
+      sign_out_type: data.sign_out_type ?? 'field_use',
+      cal_vendor: data.cal_vendor ?? null,
       equipment_request_id: data.equipment_request_id ?? null,
       equipment_request_line_id: data.equipment_request_line_id ?? null,
       building: data.building ?? null,
@@ -1096,6 +1126,8 @@ export class Database {
       equipment_number_to_test?: string | null;
       signed_out_by: string;
       purpose?: string | null;
+      sign_out_type?: 'field_use' | 'calibration';
+      cal_vendor?: string | null;
     }
   ): Promise<{ checkout_id: number; sign_out_ids: number[] }> {
     if (!data.equipment_ids?.length) throw new Error('At least one equipment is required');
@@ -1122,6 +1154,8 @@ export class Database {
         equipment_number_to_test: data.equipment_number_to_test ?? null,
         signed_out_by: data.signed_out_by.trim(),
         purpose: data.purpose ?? null,
+        sign_out_type: data.sign_out_type ?? 'field_use',
+        cal_vendor: data.cal_vendor ?? null,
       })
       .select('id')
       .single();
@@ -1133,6 +1167,8 @@ export class Database {
     const building = data.building ?? null;
     const roomNumber = data.room_number ?? null;
     const equipNum = data.equipment_number_to_test ?? null;
+    const signOutType = data.sign_out_type ?? 'field_use';
+    const calVendor = data.cal_vendor ?? null;
 
     const signOutIds: number[] = [];
     for (const equipId of validIds) {
@@ -1140,6 +1176,8 @@ export class Database {
         equipment_id: equipId,
         signed_out_by: data.signed_out_by.trim(),
         purpose,
+        sign_out_type: signOutType,
+        cal_vendor: calVendor,
         building,
         equipment_number_to_test: equipNum,
         room_number: roomNumber ?? undefined,
@@ -1150,12 +1188,32 @@ export class Database {
     return { checkout_id: checkoutId, sign_out_ids: signOutIds };
   }
 
-  async checkInSignOut(id: number, data: { signed_in_by: string }) {
+  async checkInSignOut(id: number, data: { signed_in_by: string; cal_date?: string | null; due_date?: string | null }) {
+    // 1. Fetch the sign-out to get equipment_id
+    const { data: so, error: fetchErr } = await this.supabase
+      .from('sign_outs')
+      .select('equipment_id')
+      .eq('id', id)
+      .single();
+    if (fetchErr || !so) throw new Error('Sign-out not found');
+
+    // 2. Mark as checked in
     const { error } = await this.supabase
       .from('sign_outs')
       .update({ signed_in_by: data.signed_in_by, signed_in_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
+
+    // 3. If a calibration date was provided, write it back to the equipment record
+    if (data.cal_date) {
+      const equipPayload: Record<string, unknown> = { last_calibration_date: data.cal_date };
+      if (data.due_date) equipPayload.next_calibration_due = data.due_date;
+      const { error: eqErr } = await this.supabase
+        .from('equipment')
+        .update(equipPayload)
+        .eq('id', so.equipment_id);
+      if (eqErr) throw eqErr;
+    }
   }
 
   async getUsageBySignOut(signOutId: number): Promise<Usage[]> {
@@ -1917,7 +1975,7 @@ export class Database {
       site_name: string | null;
       building: string | null;
       room_number: string | null;
-      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null; equipment_type_name: string | null }>;
       usage_equipment: string[];
     }>;
   }> {
@@ -1929,7 +1987,7 @@ export class Database {
         signed_in_at,
         building,
         room_number,
-        equipment(id, make, model, serial_number, equipment_number, department_id, departments(sites(name)))
+        equipment(id, make, model, serial_number, equipment_number, department_id, departments(sites(name)), equipment_types(name))
       `)
       .eq('equipment_number_to_test', equipmentNumber)
       .order('signed_out_at', { ascending: false });
@@ -1973,7 +2031,7 @@ export class Database {
       usage_equipment: string[];
     }> = [];
     for (const r of rows) {
-      const eq = r.equipment as { id?: number; make: string; model: string; serial_number: string; equipment_number?: string | null; departments?: { sites?: { name: string } } };
+      const eq = r.equipment as { id?: number; make: string; model: string; serial_number: string; equipment_number?: string | null; departments?: { sites?: { name: string } }; equipment_types?: { name: string } | null };
       const siteName = eq?.departments?.sites?.name ?? null;
       const usageRows = await this.getUsageBySignOut(r.id);
       tests.push({
@@ -1989,6 +2047,7 @@ export class Database {
           model: eq?.model ?? '',
           serial_number: eq?.serial_number ?? '',
           equipment_number: eq?.equipment_number ?? null,
+          equipment_type_name: eq?.equipment_types?.name ?? null,
         }],
         usage_equipment: usageRows.map((u) => u.system_equipment),
       });
