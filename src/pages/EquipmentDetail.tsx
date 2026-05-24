@@ -295,9 +295,37 @@ export default function EquipmentDetail() {
 
       <div className="card">
         <h3 className="card-title">Details</h3>
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {/* Fields grid */}
-          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', flex: '1 1 0', minWidth: 0 }}>
+        <div
+          style={{ position: 'relative', width: 120, height: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', cursor: imageUrl ? 'zoom-in' : 'pointer', marginBottom: '1rem' }}
+          onMouseEnter={() => setImageHover(true)}
+          onMouseLeave={() => setImageHover(false)}
+          onClick={() => { if (imageUrl) setLightboxOpen(true); }}
+        >
+          {imageUrl ? (
+            <img src={imageUrl} alt="Equipment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+              <img src="/Logo.png" alt="No image" style={{ width: 64, height: 64, objectFit: 'contain', opacity: 0.2, filter: 'grayscale(100%)' }} />
+            </div>
+          )}
+          {imageHover && (
+            <div
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', padding: '0.35rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <label style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer', color: '#fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Camera size={13} /> {imageUrl ? 'Change' : 'Upload'}
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} style={{ display: 'none' }} />
+              </label>
+              {imageUrl && (
+                <button type="button" onClick={handleDeleteImage} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', padding: 0 }}>
+                  <X size={13} /> Remove
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Type</div>
               <div>{equipment.equipment_type_name}</div>
@@ -326,38 +354,6 @@ export default function EquipmentDetail() {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Model</div>
               <div>{equipment.model}</div>
             </div>
-            {/* Image zone — sits to the right of Model */}
-            <div
-              style={{ position: 'relative', width: 120, height: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', cursor: imageUrl ? 'zoom-in' : 'pointer', flexShrink: 0, alignSelf: 'flex-start' }}
-              onMouseEnter={() => setImageHover(true)}
-              onMouseLeave={() => setImageHover(false)}
-              onClick={() => { if (imageUrl) setLightboxOpen(true); }}
-            >
-              {imageUrl ? (
-                <img src={imageUrl} alt="Equipment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
-                  <img src="/Logo.png" alt="No image" style={{ width: 64, height: 64, objectFit: 'contain', opacity: 0.2, filter: 'grayscale(100%)' }} />
-                </div>
-              )}
-              {/* Hover overlay — edit action */}
-              {imageHover && (
-                <div
-                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', padding: '0.35rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <label style={{ cursor: uploadingImage ? 'not-allowed' : 'pointer', color: '#fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <Camera size={13} /> {imageUrl ? 'Change' : 'Upload'}
-                    <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} style={{ display: 'none' }} />
-                  </label>
-                  {imageUrl && (
-                    <button type="button" onClick={handleDeleteImage} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fca5a5', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', padding: 0 }}>
-                      <X size={13} /> Remove
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Serial Number</div>
               <div>{equipment.serial_number}</div>
@@ -377,7 +373,6 @@ export default function EquipmentDetail() {
               <div>{equipment.next_calibration_due ? format(new Date(equipment.next_calibration_due), 'MMM d, yyyy') : '—'}</div>
             </div>
           </div>
-        </div>
         {equipment.notes && (
           <div style={{ marginTop: '1rem' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Notes</div>
