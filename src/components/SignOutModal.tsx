@@ -15,15 +15,23 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   preSelectedEquipmentId?: number;
+  /** Initial sign-out reason. Defaults to field_use. */
+  defaultType?: 'field_use' | 'calibration';
+  /** When true the reason selector is hidden and locked to defaultType. */
+  lockType?: boolean;
+  /** Prefill the "Signed Out By" name (e.g. the current manager). */
+  defaultSignedOutBy?: string;
+  /** Custom modal title. */
+  title?: string;
 }
 
-export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId }: Props) {
+export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId, defaultType = 'field_use', lockType = false, defaultSignedOutBy = '', title = 'Sign Out Equipment' }: Props) {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [activeSignOuts, setActiveSignOuts] = useState<Set<number>>(new Set());
   const [equipmentId, setEquipmentId] = useState(preSelectedEquipmentId ?? 0);
-  const [signOutType, setSignOutType] = useState<'field_use' | 'calibration'>('field_use');
+  const [signOutType, setSignOutType] = useState<'field_use' | 'calibration'>(defaultType);
   const [calVendor, setCalVendor] = useState('');
-  const [signedOutBy, setSignedOutBy] = useState('');
+  const [signedOutBy, setSignedOutBy] = useState(defaultSignedOutBy);
   const [purpose, setPurpose] = useState('');
   const [usageItems, setUsageItems] = useState<string[]>(['']);
   const [saving, setSaving] = useState(false);
@@ -91,32 +99,34 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
         <div className="modal-header">
-          <h3>Sign Out Equipment</h3>
+          <h3>{title}</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
           {/* Sign-out type selector */}
-          <div className="form-group">
-            <label>Sign-out Reason</label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                type="button"
-                className={`btn ${signOutType === 'field_use' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1 }}
-                onClick={() => setSignOutType('field_use')}
-              >
-                Field Use
-              </button>
-              <button
-                type="button"
-                className={`btn ${signOutType === 'calibration' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1 }}
-                onClick={() => setSignOutType('calibration')}
-              >
-                Calibration
-              </button>
+          {!lockType && (
+            <div className="form-group">
+              <label>Sign-out Reason</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className={`btn ${signOutType === 'field_use' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setSignOutType('field_use')}
+                >
+                  Field Use
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${signOutType === 'calibration' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setSignOutType('calibration')}
+                >
+                  Calibration
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="form-group">
             <label>Equipment</label>

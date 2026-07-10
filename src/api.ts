@@ -143,7 +143,7 @@ export const api = {
       request('/api/notifications/mark-read', { method: 'POST', body: JSON.stringify({ ids, all }) }),
   },
   equipmentTested: {
-    getAll: () => request<Array<{ equipment_number_to_test: string; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }>>('/api/equipment-tested'),
+    getAll: () => request<Array<{ equipment_number_to_test: string; tested_equipment_type: string | null; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }>>('/api/equipment-tested'),
     getDetail: (equipmentNumber: string) =>
       request<{
         equipment_number_to_test: string;
@@ -226,6 +226,8 @@ export const api = {
       building: string;
       room_number?: string | null;
       equipment_number_to_test: string;
+      tested_equipment_type?: string | null;
+      system_number?: string | null;
       date_from: string;
       date_to: string;
     }) => request('/api/equipment-requests', { method: 'POST', body: JSON.stringify(data) }),
@@ -237,6 +239,11 @@ export const api = {
       request(`/api/equipment-requests/${id}/fulfill`, {
         method: 'POST',
         body: JSON.stringify({ reviewed_by: reviewedBy, fulfillments }),
+      }),
+    updateLineQuantity: (id: number, lineId: number, quantity: number) =>
+      request(`/api/equipment-requests/${id}/lines/${lineId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ quantity }),
       }),
   },
 };

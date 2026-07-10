@@ -38,7 +38,9 @@ export default function RequestEquipment() {
   const [departmentId, setDepartmentId] = useState<string>('');
   const [building, setBuilding] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
+  const [testedEquipmentType, setTestedEquipmentType] = useState('');
   const [equipmentToTest, setEquipmentToTest] = useState('');
+  const [systemNumber, setSystemNumber] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [lines, setLines] = useState<CartLine[]>([
@@ -143,7 +145,9 @@ export default function RequestEquipment() {
         department_id: departmentId ? parseInt(departmentId, 10) : null,
         building: building.trim(),
         room_number: roomNumber.trim() || null,
+        tested_equipment_type: testedEquipmentType.trim() || null,
         equipment_number_to_test: equipmentToTest.trim(),
+        system_number: systemNumber.trim() || null,
         date_from: dateFrom,
         date_to: dateTo,
       });
@@ -156,7 +160,9 @@ export default function RequestEquipment() {
       setDepartmentId('');
       setBuilding('');
       setRoomNumber('');
+      setTestedEquipmentType('');
       setEquipmentToTest('');
+      setSystemNumber('');
       setDateFrom('');
       setDateTo('');
     } catch (err) {
@@ -332,19 +338,30 @@ export default function RequestEquipment() {
             </div>
           )}
 
-          <div className="form-group">
-            <label>Building *</label>
-            <input value={building} onChange={(e) => setBuilding(e.target.value)} required placeholder="Building where equipment will be used" />
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+            <div className="form-group">
+              <label>Building *</label>
+              <input value={building} onChange={(e) => setBuilding(e.target.value)} required placeholder="Building where equipment will be used" />
+            </div>
+            <div className="form-group">
+              <label>Room Number</label>
+              <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="Room or location" />
+            </div>
+            <div className="form-group">
+              <label>Equipment Type</label>
+              <input value={testedEquipmentType} onChange={(e) => setTestedEquipmentType(e.target.value)} placeholder="e.g. Refrigerator, Freezer, Incubator" />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>Room Number</label>
-            <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="Room or location" />
-          </div>
-
-          <div className="form-group">
-            <label>Equipment Number to Test *</label>
-            <input value={equipmentToTest} onChange={(e) => setEquipmentToTest(e.target.value)} required placeholder="e.g. Unit #12, Chamber #5" />
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+            <div className="form-group">
+              <label>Equipment Number *</label>
+              <input value={equipmentToTest} onChange={(e) => setEquipmentToTest(e.target.value)} required placeholder="e.g. Unit #12, Chamber #5" />
+            </div>
+            <div className="form-group">
+              <label>System Number (optional)</label>
+              <input value={systemNumber} onChange={(e) => setSystemNumber(e.target.value)} placeholder="e.g. SYS-4471" />
+            </div>
           </div>
 
           <div className="form-row">

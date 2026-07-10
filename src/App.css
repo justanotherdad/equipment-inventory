@@ -819,6 +819,14 @@ tr:hover td {
   color: var(--text-muted);
 }
 
+.barcode-camera-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+}
+
 /* Login page */
 .login-page {
   min-height: 100vh;

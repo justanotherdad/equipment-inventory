@@ -6,6 +6,7 @@ import { buildCsvRow } from '../utils/csvExport';
 
 interface EquipmentTestedRow {
   equipment_number_to_test: string;
+  tested_equipment_type: string | null;
   site_name: string | null;
   building: string | null;
   room_number: string | null;
@@ -30,7 +31,7 @@ interface TestDetail {
   usage_equipment: string[];
 }
 
-type SortKey = 'equipment_number_to_test' | 'site_name' | 'building' | 'room_number' | 'last_tested_at';
+type SortKey = 'equipment_number_to_test' | 'tested_equipment_type' | 'site_name' | 'building' | 'room_number' | 'last_tested_at';
 
 function formatDateMed(d: string) {
   return new Date(d).toLocaleDateString('default', { dateStyle: 'medium' });
@@ -53,6 +54,7 @@ async function buildDetailRows(rows: EquipmentTestedRow[]) {
 async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
   const header = buildCsvRow([
     'Equipment # Tested',
+    'Equipment Type',
     'Date Used',
     'Returned',
     'Site',
@@ -67,11 +69,13 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
   const csvRows: string[] = [header];
 
   const details = await buildDetailRows(rows);
-  for (const { detail } of details) {
+  for (const { row, detail } of details) {
+    const testedType = row.tested_equipment_type ?? '';
     for (const test of detail.tests) {
       if (test.equipment_used.length === 0 && test.usage_equipment.length === 0) {
         csvRows.push(buildCsvRow([
           detail.equipment_number_to_test,
+          testedType,
           formatDateMed(test.signed_out_at),
           test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
           test.site_name ?? '',
@@ -83,6 +87,7 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
         for (const eq of test.equipment_used) {
           csvRows.push(buildCsvRow([
             detail.equipment_number_to_test,
+            testedType,
             formatDateMed(test.signed_out_at),
             test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
             test.site_name ?? '',
@@ -98,6 +103,7 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
         for (const u of test.usage_equipment) {
           csvRows.push(buildCsvRow([
             detail.equipment_number_to_test,
+            testedType,
             formatDateMed(test.signed_out_at),
             test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
             test.site_name ?? '',
@@ -409,6 +415,9 @@ export default function EquipmentTested() {
                 <th className="sortable" onClick={() => handleSort('equipment_number_to_test')}>
                   Equipment # {sortKey === 'equipment_number_to_test' && (sortAsc ? '↑' : '↓')}
                 </th>
+                <th className="sortable" onClick={() => handleSort('tested_equipment_type')}>
+                  Equipment Type {sortKey === 'tested_equipment_type' && (sortAsc ? '↑' : '↓')}
+                </th>
                 <th className="sortable" onClick={() => handleSort('site_name')}>
                   Site {sortKey === 'site_name' && (sortAsc ? '↑' : '↓')}
                 </th>
@@ -445,6 +454,7 @@ export default function EquipmentTested() {
                       #{r.equipment_number_to_test}
                     </button>
                   </td>
+                  <td>{r.tested_equipment_type ?? '—'}</td>
                   <td>{r.site_name ?? '—'}</td>
                   <td>{r.building ?? '—'}</td>
                   <td>{r.room_number ?? '—'}</td>
@@ -510,6 +520,10 @@ export default function EquipmentTested() {
                 >
                   #{r.equipment_number_to_test}
                 </button>
+              </div>
+              <div className="mobile-card-row">
+                <span className="mobile-card-label">Equipment Type</span>
+                <span className="mobile-card-value">{r.tested_equipment_type ?? '—'}</span>
               </div>
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Site</span>

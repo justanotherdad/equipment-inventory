@@ -40,15 +40,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (!session?.user?.id) return;
-    try {
-      const p = await api.auth.getProfile();
-      setProfile(p);
-      api.setAuthToken(session.access_token);
-      setError(null);
-    } catch (e) {
-      setProfile(null);
-      setError(e instanceof Error ? e.message : 'Failed to load profile. Check that the server is running and schema-v3-auth-access.sql was applied.');
+    if (session.access_token) api.setAuthToken(session.access_token);
+    // Retry once on transient failure so a page refresh doesn't bounce a valid
+    // session back to the login screen because of a brief network/server hiccup.
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const p = await api.auth.getProfile();
+        setProfile(p);
+        setError(null);
+        return;
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+      }
     }
+    setProfile(null);
+    setError(lastErr instanceof Error ? lastErr.message : 'Failed to load profile. Check that the server is running and schema-v3-auth-access.sql was applied.');
   }, [session?.user?.id, session?.access_token]);
 
   useEffect(() => {
@@ -60,20 +68,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.access_token) api.setAuthToken(s.access_token);
-      setLoading(false);
+      // If there is no session we're done loading. If there IS a session we keep
+      // loading=true until the profile fetch resolves (see the profile effect
+      // below) so the route guard never bounces a signed-in user to /login.
+      if (!s) setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.access_token) api.setAuthToken(s.access_token);
-      else api.setAuthToken(null);
+      if (s?.access_token) {
+        api.setAuthToken(s.access_token);
+      } else {
+        api.setAuthToken(null);
+        setLoading(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (session?.user?.id) refreshProfile();
-    else setProfile(null);
+    let cancelled = false;
+    if (session?.user?.id) {
+      (async () => {
+        await refreshProfile();
+        if (!cancelled) setLoading(false);
+      })();
+    } else {
+      setProfile(null);
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id, refreshProfile]);
 
   const signIn = useCallback(async (email: string, password: string) => {

@@ -1089,6 +1089,8 @@ export class Database {
     signed_out_at?: string;
     checkout_id?: number;
     room_number?: string;
+    tested_equipment_type?: string | null;
+    system_number?: string | null;
   }): Promise<number> {
     const payload: Record<string, unknown> = {
       equipment_id: data.equipment_id,
@@ -1106,6 +1108,8 @@ export class Database {
     };
     if (data.checkout_id != null) payload.checkout_id = data.checkout_id;
     if (data.room_number != null) payload.room_number = data.room_number;
+    if (data.tested_equipment_type != null) payload.tested_equipment_type = data.tested_equipment_type;
+    if (data.system_number != null) payload.system_number = data.system_number;
     const { data: inserted, error } = await this.supabase
       .from('sign_outs')
       .insert(payload)
@@ -1543,6 +1547,8 @@ export class Database {
     building: string;
     room_number?: string | null;
     equipment_number_to_test: string;
+    tested_equipment_type?: string | null;
+    system_number?: string | null;
     date_from: string;
     date_to: string;
   }): Promise<number> {
@@ -1561,6 +1567,8 @@ export class Database {
     if (data.site_id != null) header.site_id = data.site_id;
     if (data.room_number != null) header.room_number = data.room_number;
     if (data.department_id != null) header.department_id = data.department_id;
+    if (data.tested_equipment_type != null) header.tested_equipment_type = data.tested_equipment_type;
+    if (data.system_number != null) header.system_number = data.system_number;
     const { data: inserted, error } = await this.supabase.from('equipment_requests').insert(header).select('id').single();
     if (error) throw error;
     const requestId = inserted?.id as number;
@@ -1751,6 +1759,8 @@ export class Database {
         building: req.building as string,
         room_number: room ?? undefined,
         equipment_number_to_test: req.equipment_number_to_test as string,
+        tested_equipment_type: (req as { tested_equipment_type?: string | null }).tested_equipment_type ?? null,
+        system_number: (req as { system_number?: string | null }).system_number ?? null,
         date_from: req.date_from as string,
         date_to: req.date_to as string,
         signed_out_at: this.signedOutAtFromDateFrom(req.date_from as string),
@@ -1780,6 +1790,49 @@ export class Database {
     if (Object.keys(updates).length) {
       const { error: upErr } = await this.supabase.from('equipment_requests').update(updates).eq('id', requestId);
       if (upErr) throw upErr;
+    }
+  }
+
+  /**
+   * Update the requested quantity for a single request line. Used by managers to
+   * adjust a request (e.g. requester asked for 10 but only 8 are needed). The new
+   * quantity cannot be below the number of units already assigned to the line.
+   * Recomputes the parent request's fulfillment status afterward.
+   */
+  async updateRequestLineQuantity(requestId: number, lineId: number, quantity: number): Promise<void> {
+    if (!Number.isInteger(quantity) || quantity < 1) throw new Error('Quantity must be a positive whole number');
+    const { data: line, error } = await this.supabase
+      .from('equipment_request_lines')
+      .select('id, equipment_request_id, quantity')
+      .eq('id', lineId)
+      .single();
+    if (error || !line) throw new Error('Request line not found');
+    if ((line as { equipment_request_id: number }).equipment_request_id !== requestId) {
+      throw new Error('Line does not belong to this request');
+    }
+    const { data: reqRow, error: reqErr } = await this.supabase
+      .from('equipment_requests')
+      .select('status')
+      .eq('id', requestId)
+      .single();
+    if (reqErr || !reqRow) throw new Error('Request not found');
+    if (reqRow.status === 'rejected') throw new Error('Cannot edit a rejected request');
+    const fulfilled = await this.countSignOutsForLine(lineId);
+    if (quantity < fulfilled) {
+      throw new Error(`Cannot set quantity below the ${fulfilled} unit(s) already assigned`);
+    }
+    const { error: upErr } = await this.supabase
+      .from('equipment_request_lines')
+      .update({ quantity })
+      .eq('id', lineId);
+    if (upErr) throw upErr;
+
+    const now = new Date().toISOString();
+    const complete = await this.isRequestFullyFulfilled(requestId);
+    if (complete && reqRow.status !== 'fulfilled' && reqRow.status !== 'pending') {
+      await this.supabase.from('equipment_requests').update({ status: 'fulfilled', fulfilled_at: now }).eq('id', requestId);
+    } else if (!complete && reqRow.status === 'fulfilled') {
+      await this.supabase.from('equipment_requests').update({ status: 'approved', fulfilled_at: null }).eq('id', requestId);
     }
   }
 
@@ -1891,6 +1944,7 @@ export class Database {
   /** Equipment tested: sign_outs with equipment_number_to_test, with site from equipment's department */
   async getEquipmentTested(profile?: Profile): Promise<Array<{
     equipment_number_to_test: string;
+    tested_equipment_type: string | null;
     site_name: string | null;
     building: string | null;
     room_number: string | null;
@@ -1900,6 +1954,7 @@ export class Database {
       .from('sign_outs')
       .select(`
         equipment_number_to_test,
+        tested_equipment_type,
         building,
         room_number,
         signed_out_at,
@@ -1913,6 +1968,7 @@ export class Database {
       const siteName = eq?.departments?.sites?.name ?? null;
       return {
         equipment_number_to_test: r.equipment_number_to_test as string,
+        tested_equipment_type: (r.tested_equipment_type as string) ?? null,
         site_name: siteName,
         building: (r.building as string) ?? null,
         room_number: (r.room_number as string) ?? null,
@@ -1946,13 +2002,14 @@ export class Database {
       }
     }
     const seen = new Set<string>();
-    const result: Array<{ equipment_number_to_test: string; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }> = [];
+    const result: Array<{ equipment_number_to_test: string; tested_equipment_type: string | null; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }> = [];
     for (const r of rows) {
       const key = `${r.equipment_number_to_test}|${r.site_name ?? ''}|${r.building ?? ''}|${r.room_number ?? ''}`;
       if (seen.has(key)) continue;
       seen.add(key);
       result.push({
         equipment_number_to_test: r.equipment_number_to_test,
+        tested_equipment_type: r.tested_equipment_type,
         site_name: r.site_name,
         building: r.building,
         room_number: r.room_number,

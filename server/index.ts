@@ -705,6 +705,22 @@ app.post('/api/equipment-requests/:id/fulfill', async (req, res) => {
   }
 });
 
+app.patch('/api/equipment-requests/:id/lines/:lineId', async (req, res) => {
+  try {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
+    const role = req.profile.role;
+    if (role !== 'super_admin' && role !== 'company_admin' && role !== 'equipment_manager') {
+      return res.status(403).json({ error: 'Approver or equipment manager access required' });
+    }
+    const { quantity } = req.body as { quantity?: number };
+    if (quantity == null) return res.status(400).json({ error: 'quantity is required' });
+    await db.updateRequestLineQuantity(parseInt(req.params.id, 10), parseInt(req.params.lineId, 10), Number(quantity));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 app.post('/api/equipment-requests/:id/reject', async (req, res) => {
   try {
     const { reviewed_by, comment } = req.body;

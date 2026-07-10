@@ -64,6 +64,9 @@ export default function RequestQueue() {
   const [fulfillFor, setFulfillFor] = useState<EquipmentRequest | null>(null);
   /** line id -> selected equipment ids for this fulfillment batch */
   const [fulfillLineSelections, setFulfillLineSelections] = useState<Record<number, number[]>>({});
+  /** line id -> draft quantity while the manager edits it */
+  const [qtyDrafts, setQtyDrafts] = useState<Record<number, number>>({});
+  const [savingLineId, setSavingLineId] = useState<number | null>(null);
   const [notifs, setNotifs] = useState<Array<{ id: number; title: string; body: string | null; created_at: string }>>([]);
 
   const load = async () => {
@@ -115,12 +118,43 @@ export default function RequestQueue() {
   const openFulfill = (r: EquipmentRequest) => {
     setFulfillFor(r);
     const next: Record<number, number[]> = {};
+    const drafts: Record<number, number> = {};
     if (r.lines) {
       for (const ln of r.lines) {
         next[ln.id] = [];
+        drafts[ln.id] = ln.quantity;
       }
     }
     setFulfillLineSelections(next);
+    setQtyDrafts(drafts);
+  };
+
+  const saveLineQty = async (line: RequestLine) => {
+    if (!fulfillFor) return;
+    const draft = qtyDrafts[line.id];
+    if (draft == null || draft === line.quantity) return;
+    setSavingLineId(line.id);
+    try {
+      await api.equipmentRequests.updateLineQuantity(fulfillFor.id, line.id, draft);
+      // Reflect the new quantity locally and trim any over-selection for the batch.
+      setFulfillFor((prev) =>
+        prev
+          ? { ...prev, lines: prev.lines?.map((l) => (l.id === line.id ? { ...l, quantity: draft } : l)) }
+          : prev
+      );
+      const done = line.fulfilled_quantity ?? 0;
+      const newNeed = Math.max(0, draft - done);
+      setFulfillLineSelections((prev) => ({
+        ...prev,
+        [line.id]: (prev[line.id] ?? []).slice(0, newNeed),
+      }));
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update quantity');
+      setQtyDrafts((prev) => ({ ...prev, [line.id]: line.quantity }));
+    } finally {
+      setSavingLineId(null);
+    }
   };
 
   const equipmentLabel = (e: EquipmentOpt) =>
@@ -602,6 +636,30 @@ export default function RequestQueue() {
                       <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {done}/{ln.quantity} assigned total</span>
                     </>
                   )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+                  <label style={{ color: 'var(--text-muted)' }}>Requested qty</label>
+                  <input
+                    type="number"
+                    min={Math.max(1, done)}
+                    value={qtyDrafts[ln.id] ?? ln.quantity}
+                    onChange={(e) =>
+                      setQtyDrafts((p) => ({ ...p, [ln.id]: Math.max(1, parseInt(e.target.value, 10) || 1) }))
+                    }
+                    style={{ width: 64, padding: '0.25rem 0.4rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
+                  />
+                  {(qtyDrafts[ln.id] ?? ln.quantity) !== ln.quantity && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem' }}
+                      onClick={() => saveLineQty(ln)}
+                      disabled={savingLineId === ln.id}
+                    >
+                      {savingLineId === ln.id ? 'Saving…' : 'Save qty'}
+                    </button>
+                  )}
+                  {done > 0 && <span style={{ color: 'var(--text-muted)' }}>· min {done} already assigned</span>}
                 </div>
                 {need === 0 ? (
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-muted)' }}>No more units needed for this line.</p>

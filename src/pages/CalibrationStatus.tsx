@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertTriangle, CheckCircle, Clock, ArrowUpDown, Wrench } from 'lucide-react';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+import SignOutModal from '../components/SignOutModal';
 
 interface CalStatus {
   id: number;
@@ -30,13 +32,20 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 const STATUS_ORDER = { due: 0, due_soon: 1, ok: 2, 'n/a': 3, out_for_cal: 4 };
 
 export default function CalibrationStatus() {
+  const { profile } = useAuth();
+  const canManage = profile?.role === 'super_admin' || profile?.role === 'company_admin' || profile?.role === 'equipment_manager';
   const [items, setItems] = useState<CalStatus[]>([]);
   const [filter, setFilter] = useState<'all' | 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('next_calibration_due');
   const [sortAsc, setSortAsc] = useState(true);
+  const [markOutId, setMarkOutId] = useState<number | null>(null);
+
+  const load = () => {
+    api.equipment.getCalibrationStatus().then(setItems);
+  };
 
   useEffect(() => {
-    api.equipment.getCalibrationStatus().then(setItems);
+    load();
   }, []);
 
   const filtered = items.filter((i) => {
@@ -89,10 +98,24 @@ export default function CalibrationStatus() {
 
   const statusBadge = (s: CalStatus) => {
     switch (s.status) {
-      case 'due':
-        return <span className="badge badge-due"><AlertTriangle size={12} /> Overdue</span>;
-      case 'due_soon':
-        return <span className="badge badge-due-soon"><Clock size={12} /> {s.days_until_due} days</span>;
+      case 'due': {
+        const overdueBy = s.days_until_due != null ? Math.abs(s.days_until_due) : null;
+        return (
+          <span className="badge badge-due">
+            <AlertTriangle size={12} />{' '}
+            {overdueBy != null ? `Overdue by ${overdueBy} day${overdueBy === 1 ? '' : 's'}` : 'Overdue'}
+          </span>
+        );
+      }
+      case 'due_soon': {
+        const d = s.days_until_due;
+        return (
+          <span className="badge badge-due-soon">
+            <Clock size={12} />{' '}
+            {d === 0 ? 'Due today' : `Due in ${d} day${d === 1 ? '' : 's'}`}
+          </span>
+        );
+      }
       case 'ok':
         return <span className="badge badge-ok"><CheckCircle size={12} /> OK</span>;
       case 'out_for_cal':
@@ -180,7 +203,17 @@ export default function CalibrationStatus() {
                   <td>{item.serial_number}</td>
                   <td>{item.last_calibration_date ? format(new Date(item.last_calibration_date), 'MMM d, yyyy') : '—'}</td>
                   <td>{item.next_calibration_due ? format(new Date(item.next_calibration_due), 'MMM d, yyyy') : '—'}</td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {canManage && item.status !== 'out_for_cal' && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', marginRight: '0.75rem' }}
+                        onClick={() => setMarkOutId(item.id)}
+                      >
+                        <Wrench size={14} /> Mark Out for Cal
+                      </button>
+                    )}
                     <Link to={`/equipment/${item.id}`} className="link">
                       View
                     </Link>
@@ -216,7 +249,17 @@ export default function CalibrationStatus() {
                 <span className="mobile-card-label">Next Due</span>
                 <span className="mobile-card-value">{item.next_calibration_due ? format(new Date(item.next_calibration_due), 'MMM d, yyyy') : '—'}</span>
               </div>
-              <div className="mobile-card-actions">
+              <div className="mobile-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {canManage && item.status !== 'out_for_cal' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => setMarkOutId(item.id)}
+                  >
+                    <Wrench size={16} /> Mark Out for Cal
+                  </button>
+                )}
                 <Link to={`/equipment/${item.id}`} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
                   View Details
                 </Link>
@@ -231,6 +274,21 @@ export default function CalibrationStatus() {
           </div>
         )}
       </div>
+
+      {markOutId != null && (
+        <SignOutModal
+          preSelectedEquipmentId={markOutId}
+          defaultType="calibration"
+          lockType
+          defaultSignedOutBy={profile?.display_name || profile?.email || ''}
+          title="Mark Out for Calibration"
+          onClose={() => setMarkOutId(null)}
+          onSaved={() => {
+            setMarkOutId(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -12,4 +12,11 @@ ALTER TABLE sign_outs ADD COLUMN IF NOT EXISTS cal_vendor text;
 ALTER TABLE checkouts ADD COLUMN IF NOT EXISTS sign_out_type text NOT NULL DEFAULT 'field_use';
 ALTER TABLE checkouts ADD COLUMN IF NOT EXISTS cal_vendor text;
 
--- Done. No data backfill needed — existing rows default to 'field_use'.
+-- 4. Tested-unit descriptors: the type of the system under test (e.g. Refrigerator)
+--    and an optional system number, captured on requests and copied to sign-outs.
+ALTER TABLE equipment_requests ADD COLUMN IF NOT EXISTS tested_equipment_type text;
+ALTER TABLE equipment_requests ADD COLUMN IF NOT EXISTS system_number text;
+ALTER TABLE sign_outs ADD COLUMN IF NOT EXISTS tested_equipment_type text;
+ALTER TABLE sign_outs ADD COLUMN IF NOT EXISTS system_number text;
+
+-- Done. No data backfill needed — existing rows default to 'field_use' / NULL.
