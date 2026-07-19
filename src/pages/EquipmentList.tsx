@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload, Download } from 'lucide-react';
+import { Plus, Search, Edit3, ArrowUpDown, ChevronLeft, ChevronRight, X, Upload, Download, LogOut } from 'lucide-react';
 import EquipmentModal from '../components/EquipmentModal';
 import EquipmentImportModal from '../components/EquipmentImportModal';
 import BulkEditModal from '../components/BulkEditModal';
 import BulkDeleteModal from '../components/BulkDeleteModal';
+import BatchCheckoutModal from '../components/BatchCheckoutModal';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { buildCsvRow } from '../utils/csvExport';
@@ -149,6 +150,9 @@ export default function EquipmentList() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signOutItems, setSignOutItems] = useState<Equipment[]>([]);
+  const [signOutNotice, setSignOutNotice] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('serial_number');
   const [sortAsc, setSortAsc] = useState(true);
@@ -321,6 +325,33 @@ export default function EquipmentList() {
     load();
   };
 
+  const openSignOut = () => {
+    const selected = equipment.filter((e) => selectedIds.has(e.id));
+    const available = selected.filter((e) => getStatusForEquipment(e.id, activeSignOuts) === 'available');
+    const unavailable = selected.filter((e) => getStatusForEquipment(e.id, activeSignOuts) !== 'available');
+    if (available.length === 0) {
+      setSignOutItems([]);
+      setSignOutNotice('All selected items are already checked out. Nothing to sign out.');
+      setShowSignOutModal(true);
+      return;
+    }
+    setSignOutItems(available);
+    setSignOutNotice(
+      unavailable.length > 0
+        ? `${unavailable.length} of ${selected.length} selected item${unavailable.length !== 1 ? 's were' : ' was'} already checked out and skipped.`
+        : ''
+    );
+    setShowSignOutModal(true);
+  };
+
+  const handleSignedOut = () => {
+    setShowSignOutModal(false);
+    setSignOutItems([]);
+    setSignOutNotice('');
+    setSelectedIds(new Set());
+    load();
+  };
+
   const handleExportCsv = () => {
     const header = buildCsvRow([
       'department',
@@ -409,6 +440,10 @@ export default function EquipmentList() {
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {canEdit && selectedIds.size > 0 && (
             <>
+              <button type="button" className="btn btn-primary" onClick={openSignOut}>
+                <LogOut size={18} />
+                Sign Out {selectedIds.size} selected
+              </button>
               <button type="button" className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
                 <Edit3 size={18} />
                 Edit {selectedIds.size} selected
@@ -868,6 +903,22 @@ export default function EquipmentList() {
           equipmentIds={Array.from(selectedIds)}
           onClose={() => setShowBulkDeleteModal(false)}
           onDeleted={handleBulkDeleted}
+        />
+      )}
+
+      {showSignOutModal && (
+        <BatchCheckoutModal
+          onClose={() => setShowSignOutModal(false)}
+          onSaved={handleSignedOut}
+          initialItems={signOutItems.map((e) => ({
+            id: e.id,
+            equipment_type_name: e.equipment_type_name ?? '',
+            make: e.make,
+            model: e.model,
+            serial_number: e.serial_number,
+            equipment_number: e.equipment_number ?? null,
+          }))}
+          notice={signOutNotice || undefined}
         />
       )}
     </div>

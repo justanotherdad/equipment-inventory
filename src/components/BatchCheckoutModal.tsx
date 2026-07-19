@@ -20,10 +20,14 @@ interface Site {
 interface Props {
   onClose: () => void;
   onSaved: () => void;
+  /** Pre-populate the checkout list (e.g. from equipment rows selected on the Equipment screen). */
+  initialItems?: ScannedItem[];
+  /** Optional informational notice shown at the top (e.g. items skipped because already checked out). */
+  notice?: string;
 }
 
-export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
-  const [scanned, setScanned] = useState<ScannedItem[]>([]);
+export default function BatchCheckoutModal({ onClose, onSaved, initialItems, notice }: Props) {
+  const [scanned, setScanned] = useState<ScannedItem[]>(initialItems ?? []);
   const [scanError, setScanError] = useState('');
   const [sites, setSites] = useState<Site[]>([]);
   const [signOutType, setSignOutType] = useState<'field_use' | 'calibration'>('field_use');
@@ -116,6 +120,21 @@ export default function BatchCheckoutModal({ onClose, onSaved }: Props) {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
           Scan equipment barcodes (1 or many), then add the checkout details below.
         </p>
+
+        {notice && (
+          <p
+            style={{
+              color: 'var(--warning)',
+              fontSize: '0.85rem',
+              marginBottom: '1rem',
+              padding: '0.5rem 0.75rem',
+              background: 'var(--bg-tertiary)',
+              borderRadius: 8,
+            }}
+          >
+            {notice}
+          </p>
+        )}
 
         {/* Reason selector */}
         <div className="form-group" style={{ marginBottom: '1rem' }}>
