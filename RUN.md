@@ -2,34 +2,31 @@
 
 ## Prerequisites
 
-- **Node.js** 18 or newer
+- **Node.js** 20.19 or newer
 - **npm** (comes with Node.js)
 
 Check your versions:
 
 ```bash
-node --version   # Should be v18.x or higher
+node --version   # Should be v20.19.x or higher
 npm --version
 ```
 
 ## Development Mode
 
-Run the app with hot-reload for development:
-
 ```bash
-cd equipment-inventory
 npm install
 npm run dev
 ```
 
-This will:
+This starts:
 
-1. Compile the Electron main process (TypeScript → JavaScript)
-2. Start the Vite dev server for the React frontend
-3. Launch Electron and open the app window
-4. Connect to `http://localhost:5173` for live reload
+1. **Express API** (`npm run dev:server`) on port **3000**
+2. **Vite** React client (`npm run dev:client`) on port **5173**
 
-The app window opens with DevTools enabled. Changes to React components will hot-reload; changes to `main/` require restarting (`Ctrl+C` then `npm run dev` again).
+Open **http://localhost:5173** in your browser.
+
+Copy `.env.example` to `.env` and set Supabase / auth values before first run (see `DEPLOY-RENDER.md`).
 
 ## Barcode Scanner
 
@@ -41,21 +38,20 @@ USB barcode scanners work as keyboard input devices. On the **Sign-outs** page, 
 
 For equipment without serial numbers, set an **Equipment Number** when adding the item. Print a barcode label with that number for scanning.
 
-## First Run
+## Production locally
 
-On first launch, the app creates:
+```bash
+npm run build
+npm start
+```
 
-- **Database**: `~/Library/Application Support/equipment-inventory/equipment-inventory.db` (macOS)  
-  or `%APPDATA%\equipment-inventory\equipment-inventory.db` (Windows)
-- **Calibration records folder**: Same directory, `calibration-records/`
-
-Default equipment types (Temperature Logger, Laptop, etc.) are seeded automatically.
+Open **http://localhost:3000** (or the port set by `PORT`).
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| `tsc: command not found` | Run `npm install` first, then use `npm run dev` (which uses `npx tsc`) |
-| `API not available` | The app must run via Electron. Use `npm run dev`, not `npm run dev:react` alone |
+| Auth / API errors | Ensure `.env` has Supabase URL and keys; restart `npm run dev` |
 | Port 5173 in use | Stop other Vite processes or change the port in `vite.config.ts` |
-| Blank window | Wait for Vite to finish compiling, or check the terminal for errors |
+| Port 3000 in use | Stop the other API process or set `PORT` |
+| Blank page | Check the terminal for Vite or API errors |

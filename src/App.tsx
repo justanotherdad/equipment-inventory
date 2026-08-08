@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from './api';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import './App.css';
-import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key, FlaskConical, Globe } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import ChangePasswordModal from './components/ChangePasswordModal';
@@ -19,6 +19,7 @@ import EquipmentTypes from './pages/EquipmentTypes';
 import RequestEquipment from './pages/RequestEquipment';
 import RequestQueue from './pages/RequestQueue';
 import Admin from './pages/Admin';
+import Platform from './pages/Platform';
 import CalibrationDownloads from './pages/CalibrationDownloads';
 import EquipmentTested from './pages/EquipmentTested';
 import Login from './pages/Login';
@@ -35,6 +36,7 @@ const navItems = [
   { to: '/calibration-downloads', icon: Download, label: 'Download Cal Certs' },
   { to: '/settings', icon: Settings, label: 'Equipment Types' },
   { to: '/admin', icon: Shield, label: 'Admin' },
+  { to: '/platform', icon: Globe, label: 'Platform' },
 ];
 
 function ProtectedLayout() {
@@ -96,11 +98,20 @@ function ProtectedLayout() {
     );
   }
 
-  const filteredNavItems = (profile.role === 'super_admin' || profile.role === 'company_admin')
-    ? navItems
-    : (profile.role === 'equipment_manager'
-      ? navItems.map((item) => item.to === '/admin' ? { ...item, label: 'Create User' } : item)
-      : navItems.filter((item) => item.to !== '/admin'));
+  const filteredNavItems = (() => {
+    if (profile.role === 'super_admin') {
+      return navItems.filter((item) => item.to !== '/admin');
+    }
+    if (profile.role === 'company_admin') {
+      return navItems.filter((item) => item.to !== '/platform');
+    }
+    if (profile.role === 'equipment_manager') {
+      return navItems
+        .filter((item) => item.to !== '/platform')
+        .map((item) => (item.to === '/admin' ? { ...item, label: 'Create User' } : item));
+    }
+    return navItems.filter((item) => item.to !== '/admin' && item.to !== '/platform');
+  })();
 
   return (
     <div className="app-layout">
@@ -186,6 +197,7 @@ function ProtectedLayout() {
             <Route path="/calibration-downloads" element={<CalibrationDownloads />} />
             <Route path="/settings" element={<EquipmentTypes />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/platform" element={<Platform />} />
           </Routes>
         </main>
       </div>

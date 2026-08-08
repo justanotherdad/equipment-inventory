@@ -1,4 +1,0 @@
-#!/bin/sh
-# Open Equipment Inventory after PKG install completes
-# Runs when user completes the installer (default install to /Applications)
-open "/Applications/Equipment Inventory.app"

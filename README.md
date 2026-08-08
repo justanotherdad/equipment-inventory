@@ -1,6 +1,6 @@
 # Equipment Inventory
 
-A web application for tracking equipment inventory, calibrations, sign-outs, and usage. Built with React, TypeScript, Express, and SQLite.
+A web application for tracking equipment inventory, calibrations, sign-outs, and usage. Built with React, TypeScript, Express, and Supabase.
 
 ## Features
 
@@ -16,9 +16,10 @@ A web application for tracking equipment inventory, calibrations, sign-outs, and
 - **Usage History**: See which systems or equipment each item was used to map/test during sign-outs
 - **Mobile Friendly**: Responsive layout with collapsible sidebar on small screens
 - **User Login**: Supabase Auth (email/password). Sign up or sign in required.
-- **Admin Panel**: Manage users, roles (User, Equipment Manager, Admin), sites, and departments
+- **Admin Panel**: Company admins manage users, roles, sites, and departments for their company
+- **Platform** (Super Admin): Multi-company and subscription management
 - **Access Control**: Users and equipment managers see only equipment in their assigned sites/departments
-- **Departments**: Equipment is assigned to departments within sites. Admins create sites and departments.
+- **Departments**: Equipment is assigned to departments within sites. See `USER-ACCESS.md` for roles.
 
 ## Requirements
 

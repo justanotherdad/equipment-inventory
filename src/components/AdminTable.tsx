@@ -19,7 +19,7 @@ interface AdminTableProps<T> {
   emptyMessage?: string;
 }
 
-export function AdminTable<T extends Record<string, unknown>>({
+export function AdminTable<T extends object>({
   columns,
   data,
   searchPlaceholder = 'Search…',
@@ -32,16 +32,19 @@ export function AdminTable<T extends Record<string, unknown>>({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
+  const rowRecord = (row: T) => row as T & Record<string, unknown>;
+
   const filteredAndSorted = useMemo(() => {
     let result = [...data];
 
     // Search
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      const keys = searchKeys ?? columns.map((c) => c.key).filter((k) => typeof data[0]?.[k] === 'string' || typeof data[0]?.[k] === 'number');
+      const sample = data[0] ? rowRecord(data[0]) : null;
+      const keys = searchKeys ?? columns.map((c) => c.key).filter((k) => sample && (typeof sample[k] === 'string' || typeof sample[k] === 'number'));
       result = result.filter((row) =>
         keys.some((k) => {
-          const v = row[k];
+          const v = rowRecord(row)[k as string];
           return v != null && String(v).toLowerCase().includes(q);
         })
       );
@@ -51,7 +54,7 @@ export function AdminTable<T extends Record<string, unknown>>({
     for (const [colKey, filterVal] of Object.entries(columnFilters)) {
       if (!filterVal?.trim()) continue;
       const col = columns.find((c) => c.key === colKey);
-      const getVal = col?.value ?? ((r: T) => r[colKey as keyof T]);
+      const getVal = col?.value ?? ((r: T) => rowRecord(r)[colKey]);
       const q = filterVal.trim().toLowerCase();
       result = result.filter((row) => {
         const v = getVal(row);
@@ -62,7 +65,7 @@ export function AdminTable<T extends Record<string, unknown>>({
     // Sort
     if (sortKey) {
       const col = columns.find((c) => c.key === sortKey);
-      const getVal = col?.value ?? ((r: T) => r[sortKey as keyof T]);
+      const getVal = col?.value ?? ((r: T) => rowRecord(r)[sortKey]);
       result.sort((a, b) => {
         const va = getVal(a);
         const vb = getVal(b);
