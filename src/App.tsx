@@ -69,7 +69,7 @@ function ProtectedLayout() {
     load();
     const t = setInterval(load, 120000);
     return () => clearInterval(t);
-  }, [profile, location.pathname]);
+  }, [profile, location.pathname, companyId]);
 
   if (loading) {
     return (

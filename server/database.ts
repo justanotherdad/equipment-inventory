@@ -1945,6 +1945,9 @@ export class Database {
       }
       if (ok) ids.add(pid);
     }
+    // Super Admins see all companies via Viewing company filter; always notify them
+    const { data: supers } = await this.supabase.from('profiles').select('id').eq('role', 'super_admin');
+    (supers ?? []).forEach((p: { id: number }) => ids.add(p.id));
     return [...ids];
   }
 
@@ -2155,22 +2158,22 @@ export class Database {
     if (error) throw error;
   }
 
-  async getNotifications(profileId: number, unreadOnly?: boolean): Promise<AppNotification[]> {
+  async getNotifications(
+    profileId: number,
+    unreadOnly?: boolean,
+    profile?: Profile,
+    companyId?: number | null
+  ): Promise<AppNotification[]> {
     let q = this.supabase.from('app_notifications').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(100);
     if (unreadOnly) q = q.is('read_at', null);
     const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []) as AppNotification[];
+    return this.filterNotificationsByCompanyScope((data ?? []) as AppNotification[], profile, companyId);
   }
 
-  async getUnreadNotificationCount(profileId: number): Promise<number> {
-    const { count, error } = await this.supabase
-      .from('app_notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('profile_id', profileId)
-      .is('read_at', null);
-    if (error) throw error;
-    return count ?? 0;
+  async getUnreadNotificationCount(profileId: number, profile?: Profile, companyId?: number | null): Promise<number> {
+    const unread = await this.getNotifications(profileId, true, profile, companyId);
+    return unread.length;
   }
 
   async markNotificationsRead(profileId: number, ids: number[]): Promise<void> {
@@ -2183,13 +2186,84 @@ export class Database {
     if (error) throw error;
   }
 
-  async markAllNotificationsRead(profileId: number): Promise<void> {
-    const { error } = await this.supabase
-      .from('app_notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('profile_id', profileId)
-      .is('read_at', null);
+  async markAllNotificationsRead(profileId: number, profile?: Profile, companyId?: number | null): Promise<void> {
+    const visible = await this.getNotifications(profileId, true, profile, companyId);
+    const ids = visible.map((n) => n.id);
+    if (!ids.length) return;
+    await this.markNotificationsRead(profileId, ids);
+  }
+
+  /** Restrict notifications to the Viewing company (Super Admin) or company_admin's company. */
+  private async filterNotificationsByCompanyScope(
+    rows: AppNotification[],
+    profile?: Profile,
+    companyId?: number | null
+  ): Promise<AppNotification[]> {
+    if (!rows.length) return rows;
+    let scopeId: number | null | undefined;
+    if (profile?.role === 'super_admin') {
+      if (companyId == null || Number.isNaN(Number(companyId))) return rows;
+      scopeId = Number(companyId);
+    } else if (profile?.role === 'company_admin' && profile.company_id) {
+      scopeId = profile.company_id;
+    } else {
+      return rows;
+    }
+
+    const reqIds = [
+      ...new Set(rows.map((r) => r.equipment_request_id).filter((id): id is number => id != null)),
+    ];
+    const companyByRequest = await this.getCompanyIdsForRequestIds(reqIds);
+    return rows.filter((r) => {
+      if (r.equipment_request_id == null) return false;
+      return companyByRequest.get(r.equipment_request_id) === scopeId;
+    });
+  }
+
+  /** Resolve company_id for a set of equipment_request ids (site / dept / equipment / type). */
+  private async getCompanyIdsForRequestIds(requestIds: number[]): Promise<Map<number, number | null>> {
+    const map = new Map<number, number | null>();
+    if (!requestIds.length) return map;
+
+    const { data: reqs, error } = await this.supabase
+      .from('equipment_requests')
+      .select(`
+        id,
+        site_id,
+        department_id,
+        equipment_id,
+        sites(company_id),
+        departments(sites(company_id)),
+        equipment(departments(sites(company_id))),
+        equipment_request_lines(equipment_types(company_id))
+      `)
+      .in('id', requestIds);
     if (error) throw error;
+
+    for (const r of reqs ?? []) {
+      const row = r as {
+        id: number;
+        sites?: { company_id?: number | null } | null;
+        departments?: { sites?: { company_id?: number | null } | null } | null;
+        equipment?: { departments?: { sites?: { company_id?: number | null } | null } | null } | null;
+        equipment_request_lines?: { equipment_types?: { company_id?: number | null } | null }[] | null;
+      };
+      let companyId =
+        row.equipment?.departments?.sites?.company_id ??
+        row.departments?.sites?.company_id ??
+        row.sites?.company_id ??
+        null;
+      if (companyId == null) {
+        for (const ln of row.equipment_request_lines ?? []) {
+          if (ln.equipment_types?.company_id != null) {
+            companyId = ln.equipment_types.company_id;
+            break;
+          }
+        }
+      }
+      map.set(row.id, companyId);
+    }
+    return map;
   }
 
   async deleteCalibrationRecord(id: number): Promise<{ storage_path: string } | null> {

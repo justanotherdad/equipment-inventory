@@ -22,6 +22,7 @@ const SCOPED_GET_PREFIXES = [
   '/api/sites',
   '/api/departments',
   '/api/calibration-records',
+  '/api/notifications',
 ];
 
 function pathMatchesScopePrefix(path: string, prefix: string): boolean {
@@ -33,7 +34,8 @@ function withCompanyScope(path: string, method?: string): string {
   const isScopedGet = m === 'GET' && SCOPED_GET_PREFIXES.some((p) => pathMatchesScopePrefix(path, p));
   const isEquipmentTypesWrite =
     (m === 'POST' || m === 'PUT' || m === 'DELETE') && pathMatchesScopePrefix(path, '/api/equipment-types');
-  if (!isScopedGet && !isEquipmentTypesWrite) return path;
+  const isNotificationsWrite = m === 'POST' && pathMatchesScopePrefix(path, '/api/notifications');
+  if (!isScopedGet && !isEquipmentTypesWrite && !isNotificationsWrite) return path;
   // Don't scope admin/platform company management or auth
   if (path.startsWith('/api/admin/') || path.startsWith('/api/auth/')) return path;
   const sep = path.includes('?') ? '&' : '?';

@@ -463,7 +463,7 @@ app.get('/api/notifications', async (req, res) => {
   try {
     if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
     const unreadOnly = req.query.unread === '1' || req.query.unread === 'true';
-    const data = await db.getNotifications(req.profile.id, unreadOnly);
+    const data = await db.getNotifications(req.profile.id, unreadOnly, req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -473,7 +473,7 @@ app.get('/api/notifications', async (req, res) => {
 app.get('/api/notifications/unread-count', async (req, res) => {
   try {
     if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
-    const count = await db.getUnreadNotificationCount(req.profile.id);
+    const count = await db.getUnreadNotificationCount(req.profile.id, req.profile, parseCompanyScope(req));
     res.json({ count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -484,7 +484,7 @@ app.post('/api/notifications/mark-read', async (req, res) => {
   try {
     if (!req.profile) return res.status(401).json({ error: 'Unauthorized' });
     const { ids, all } = req.body as { ids?: number[]; all?: boolean };
-    if (all) await db.markAllNotificationsRead(req.profile.id);
+    if (all) await db.markAllNotificationsRead(req.profile.id, req.profile, parseCompanyScope(req));
     else if (Array.isArray(ids)) await db.markNotificationsRead(req.profile.id, ids);
     res.json({ ok: true });
   } catch (err) {
