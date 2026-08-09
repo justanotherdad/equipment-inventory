@@ -146,7 +146,7 @@ function ProtectedLayout() {
                     borderRadius: 6,
                     border: '1px solid var(--border)',
                     background: 'var(--bg-primary)',
-                    color: 'inherit',
+                    color: 'var(--text-primary)',
                     fontSize: '0.85rem',
                   }}
                 >
