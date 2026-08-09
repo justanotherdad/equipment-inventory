@@ -7,6 +7,7 @@ Run in SQL Editor as needed:
 - `supabase/schema-v8-onboarding.sql` – adds `onboarding_complete` to `profiles`
 - `supabase/schema-v9-site-dept-unique.sql` – scopes site/department uniqueness per company/site (allows same names across companies)
 - `supabase/schema-v10-subscription-cal.sql` – subscription expiration, cal/due dates on calibration records, subscription_orders table
+- `supabase/schema-v11-rls.sql` – enables RLS on public tables (no open policies; API uses service role)
 
 **Square payments (optional):**  
 Add to `.env` for payment processing:
