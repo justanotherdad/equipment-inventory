@@ -1051,11 +1051,38 @@ app.post('/api/payments/process', companyAdminOnly, async (req, res) => {
 
 app.post('/api/admin/companies', superAdminOnly, async (req, res) => {
   try {
-    const { name, contact_email, contact_name, create_admin, admin_email, admin_password } = req.body;
+    const {
+      name,
+      contact_email,
+      contact_name,
+      contact_phone,
+      address_line1,
+      address_line2,
+      address_city,
+      address_state,
+      address_zip,
+      subscription_level,
+      subscription_active,
+      create_admin,
+      admin_email,
+      admin_password,
+    } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
     const contactEmail = contact_email?.trim?.() || (create_admin ? admin_email?.trim?.() : null) || null;
     const contactName = contact_name?.trim?.() || null;
-    const companyId = await db.createCompany(name.trim(), contactEmail, contactName);
+    const companyId = await db.createCompany({
+      name: name.trim(),
+      contact_email: contactEmail,
+      contact_name: contactName,
+      contact_phone: contact_phone?.trim?.() || null,
+      address_line1: address_line1?.trim?.() || null,
+      address_line2: address_line2?.trim?.() || null,
+      address_city: address_city?.trim?.() || null,
+      address_state: address_state?.trim?.() || null,
+      address_zip: address_zip?.trim?.() || null,
+      subscription_level: typeof subscription_level === 'number' ? subscription_level : parseInt(String(subscription_level || '1'), 10) || 1,
+      subscription_active: typeof subscription_active === 'boolean' ? subscription_active : true,
+    });
     if (create_admin && admin_email?.trim() && admin_password?.trim() && companyId) {
       const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
         email: admin_email.trim().toLowerCase(),

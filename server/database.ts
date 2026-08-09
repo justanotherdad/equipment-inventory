@@ -372,14 +372,39 @@ export class Database {
     if (error) throw error;
   }
 
-  async createCompany(name: string, contactEmail?: string | null, contactName?: string | null) {
-    const { data, error } = await this.supabase.from('companies').insert({
-      name,
-      contact_email: contactEmail ?? null,
-      contact_name: contactName ?? null,
-    }).select('id').single();
+  async createCompany(data: {
+    name: string;
+    contact_email?: string | null;
+    contact_name?: string | null;
+    contact_phone?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    address_city?: string | null;
+    address_state?: string | null;
+    address_zip?: string | null;
+    subscription_level?: number;
+    subscription_active?: boolean;
+  }) {
+    const subscriptionActive = data.subscription_active ?? true;
+    const payload: Record<string, unknown> = {
+      name: data.name,
+      contact_email: data.contact_email ?? null,
+      contact_name: data.contact_name ?? null,
+      contact_phone: data.contact_phone ?? null,
+      address_line1: data.address_line1 ?? null,
+      address_line2: data.address_line2 ?? null,
+      address_city: data.address_city ?? null,
+      address_state: data.address_state ?? null,
+      address_zip: data.address_zip ?? null,
+      subscription_level: data.subscription_level ?? 1,
+      subscription_active: subscriptionActive,
+    };
+    if (subscriptionActive) {
+      payload.subscription_activated_at = new Date().toISOString();
+    }
+    const { data: row, error } = await this.supabase.from('companies').insert(payload).select('id').single();
     if (error) throw error;
-    return (data as { id: number })?.id ?? null;
+    return (row as { id: number })?.id ?? null;
   }
 
   async deleteCompany(companyId: number): Promise<{ storagePaths: string[]; authUserIds: string[] }> {

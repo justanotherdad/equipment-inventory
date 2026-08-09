@@ -110,6 +110,14 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyContactEmail, setNewCompanyContactEmail] = useState('');
   const [newCompanyContactName, setNewCompanyContactName] = useState('');
+  const [newCompanyContactPhone, setNewCompanyContactPhone] = useState('');
+  const [newCompanyAddr1, setNewCompanyAddr1] = useState('');
+  const [newCompanyAddr2, setNewCompanyAddr2] = useState('');
+  const [newCompanyCity, setNewCompanyCity] = useState('');
+  const [newCompanyState, setNewCompanyState] = useState('');
+  const [newCompanyZip, setNewCompanyZip] = useState('');
+  const [newCompanySubLevel, setNewCompanySubLevel] = useState(1);
+  const [newCompanySubActive, setNewCompanySubActive] = useState(true);
   const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
   const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
   const [createCompanyWithAdmin, setCreateCompanyWithAdmin] = useState(true);
@@ -315,6 +323,14 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
         name: newCompanyName.trim(),
         contact_email: newCompanyContactEmail.trim() || newCompanyAdminEmail.trim(),
         contact_name: newCompanyContactName.trim() || undefined,
+        contact_phone: newCompanyContactPhone.trim() || undefined,
+        address_line1: newCompanyAddr1.trim() || undefined,
+        address_line2: newCompanyAddr2.trim() || undefined,
+        address_city: newCompanyCity.trim() || undefined,
+        address_state: newCompanyState.trim() || undefined,
+        address_zip: newCompanyZip.trim() || undefined,
+        subscription_level: newCompanySubLevel,
+        subscription_active: newCompanySubActive,
         create_admin: createCompanyWithAdmin,
         admin_email: createCompanyWithAdmin ? newCompanyAdminEmail.trim() : undefined,
         admin_password: createCompanyWithAdmin ? newCompanyAdminPassword : undefined,
@@ -323,6 +339,14 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
       setNewCompanyName('');
       setNewCompanyContactEmail('');
       setNewCompanyContactName('');
+      setNewCompanyContactPhone('');
+      setNewCompanyAddr1('');
+      setNewCompanyAddr2('');
+      setNewCompanyCity('');
+      setNewCompanyState('');
+      setNewCompanyZip('');
+      setNewCompanySubLevel(1);
+      setNewCompanySubActive(true);
       setNewCompanyAdminEmail('');
       setNewCompanyAdminPassword('');
       await load(false);
@@ -1142,20 +1166,61 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
       {/* Add Company Modal */}
       {addCompanyModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddCompanyModal(false)}>
-          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 440, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 12, padding: '1.5rem', maxWidth: 480, width: '90%', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <h3>Add Company</h3>
             <form onSubmit={handleAddCompany}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
                 <label>Company Name</label>
                 <input type="text" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} required placeholder="Company name" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
               </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
                 <label>Contact Name</label>
                 <input type="text" value={newCompanyContactName} onChange={(e) => setNewCompanyContactName(e.target.value)} placeholder="Main contact" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
               </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
                 <label>Contact Email</label>
                 <input type="email" value={newCompanyContactEmail} onChange={(e) => setNewCompanyContactEmail(e.target.value)} placeholder="contact@company.com" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Contact Phone</label>
+                <input type="tel" value={newCompanyContactPhone} onChange={(e) => setNewCompanyContactPhone(e.target.value)} placeholder="Phone" style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Address Line 1</label>
+                <input type="text" value={newCompanyAddr1} onChange={(e) => setNewCompanyAddr1(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Address Line 2</label>
+                <input type="text" value={newCompanyAddr2} onChange={(e) => setNewCompanyAddr2(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+              </div>
+              <div className="admin-address-grid" style={{ marginBottom: '0.75rem' }}>
+                <div className="form-group">
+                  <label>City</label>
+                  <input type="text" value={newCompanyCity} onChange={(e) => setNewCompanyCity(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+                <div className="form-group">
+                  <label>State</label>
+                  <input type="text" value={newCompanyState} onChange={(e) => setNewCompanyState(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+                <div className="form-group">
+                  <label>ZIP</label>
+                  <input type="text" value={newCompanyZip} onChange={(e) => setNewCompanyZip(e.target.value)} style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Subscription Level</label>
+                  <select value={newCompanySubLevel} onChange={(e) => setNewCompanySubLevel(parseInt(e.target.value, 10))} style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}>
+                    <option value={1}>Basic</option>
+                    <option value={2}>Standard</option>
+                    <option value={3}>Professional</option>
+                    <option value={4}>Enterprise</option>
+                  </select>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={newCompanySubActive} onChange={(e) => setNewCompanySubActive(e.target.checked)} />
+                  Active
+                </label>
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', cursor: 'pointer' }}>
                 <input type="checkbox" checked={createCompanyWithAdmin} onChange={(e) => setCreateCompanyWithAdmin(e.target.checked)} />

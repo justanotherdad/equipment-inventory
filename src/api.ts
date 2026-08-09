@@ -79,7 +79,22 @@ export const api = {
     completeOnboarding: () => request('/api/admin/onboarding-complete', { method: 'POST' }),
     updateCompany: (id: number, data: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null; subscription_level?: number; subscription_active?: boolean }) =>
       request(`/api/admin/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    createCompany: (data: { name: string; contact_email?: string; contact_name?: string; create_admin?: boolean; admin_email?: string; admin_password?: string }) =>
+    createCompany: (data: {
+      name: string;
+      contact_email?: string;
+      contact_name?: string;
+      contact_phone?: string;
+      address_line1?: string;
+      address_line2?: string;
+      address_city?: string;
+      address_state?: string;
+      address_zip?: string;
+      subscription_level?: number;
+      subscription_active?: boolean;
+      create_admin?: boolean;
+      admin_email?: string;
+      admin_password?: string;
+    }) =>
       request<{ id?: number }>('/api/admin/companies', { method: 'POST', body: JSON.stringify(data) }),
     updateCompanySubscription: (id: number, subscriptionActive: boolean, subscriptionLevel?: number) =>
       request(`/api/admin/companies/${id}/subscription`, { method: 'PUT', body: JSON.stringify({ subscription_active: subscriptionActive, subscription_level: subscriptionLevel }) }),
