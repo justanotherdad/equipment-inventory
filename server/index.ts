@@ -1164,10 +1164,12 @@ if (fs.existsSync(distPath)) {
     let html = fs.readFileSync(indexPath, 'utf8');
     const envUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const envAnon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const turnstileSiteKey = process.env.VITE_TURNSTILE_SITE_KEY;
     if (envUrl && envAnon) {
       const payload = JSON.stringify({
         VITE_SUPABASE_URL: envUrl,
         VITE_SUPABASE_ANON_KEY: envAnon,
+        ...(turnstileSiteKey ? { VITE_TURNSTILE_SITE_KEY: turnstileSiteKey } : {}),
       });
       html = html.replace('<head>', `<head><script>window.__ENV__=${payload}</script>`);
     }

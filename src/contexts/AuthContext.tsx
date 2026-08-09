@@ -25,8 +25,8 @@ export interface AuthState {
 }
 
 const AuthContext = createContext<AuthState & {
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<void>;
+  signUp: (email: string, password: string, captchaToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 } | null>(null);
@@ -101,10 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session?.user?.id, refreshProfile]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, captchaToken?: string) => {
     setError(null);
     if (!supabase) throw new Error('Auth not configured');
-    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: err } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: captchaToken ? { captchaToken } : undefined,
+    });
     if (err) {
       setError(err.message);
       throw err;
@@ -112,10 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.session) api.setAuthToken(data.session.access_token);
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string, captchaToken?: string) => {
     setError(null);
     if (!supabase) throw new Error('Auth not configured');
-    const { data, error: err } = await supabase.auth.signUp({ email, password });
+    const { data, error: err } = await supabase.auth.signUp({
+      email,
+      password,
+      options: captchaToken ? { captchaToken } : undefined,
+    });
     if (err) {
       setError(err.message);
       throw err;

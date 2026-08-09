@@ -16,6 +16,7 @@
     "node": ">=20.19.0"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.5.5",
     "@supabase/supabase-js": "^2.95.3",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
