@@ -14,22 +14,25 @@ export function setCompanyScope(companyId: number | null) {
 }
 
 const SCOPED_GET_PREFIXES = [
+  '/api/equipment-types',
+  '/api/equipment-tested',
+  '/api/equipment-requests',
   '/api/equipment',
   '/api/sign-outs',
-  '/api/equipment-tested',
   '/api/sites',
   '/api/departments',
   '/api/calibration-records',
-  '/api/equipment-requests',
-  '/api/equipment-types',
 ];
+
+function pathMatchesScopePrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`);
+}
 
 function withCompanyScope(path: string, method?: string): string {
   const m = (method ?? 'GET').toUpperCase();
-  const isScopedGet = m === 'GET' && SCOPED_GET_PREFIXES.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'));
+  const isScopedGet = m === 'GET' && SCOPED_GET_PREFIXES.some((p) => pathMatchesScopePrefix(path, p));
   const isEquipmentTypesWrite =
-    (m === 'POST' || m === 'PUT' || m === 'DELETE') &&
-    (path === '/api/equipment-types' || path.startsWith('/api/equipment-types/'));
+    (m === 'POST' || m === 'PUT' || m === 'DELETE') && pathMatchesScopePrefix(path, '/api/equipment-types');
   if (!isScopedGet && !isEquipmentTypesWrite) return path;
   // Don't scope admin/platform company management or auth
   if (path.startsWith('/api/admin/') || path.startsWith('/api/auth/')) return path;

@@ -883,6 +883,11 @@ export class Database {
       const equipSet = new Set(allowedEquip);
       rows = rows.filter((e) => equipSet.has(e.id));
     }
+    // Belt-and-suspenders: never show another company's rows when Super Admin scoped a company
+    if (profile?.role === 'super_admin' && companyId != null && !Number.isNaN(Number(companyId))) {
+      const cid = Number(companyId);
+      rows = rows.filter((e) => e.company_id === cid);
+    }
     return rows;
   }
 

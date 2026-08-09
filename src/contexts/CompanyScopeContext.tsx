@@ -19,26 +19,40 @@ const STORAGE_KEY = 'equipforge_company_scope';
 
 const CompanyScopeContext = createContext<CompanyScopeState | null>(null);
 
+function readStoredCompanyId(): number | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw == null || raw == '' || raw === 'all') return null;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  } catch {
+    return null;
+  }
+}
+
+function persistCompanyId(id: number | null) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, id == null ? 'all' : String(id));
+  } catch { /* ignore */ }
+}
+
 export function CompanyScopeProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [companies, setCompanies] = useState<ScopedCompany[]>([]);
-  const [companyId, setCompanyIdState] = useState<number | null>(() => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw == null || raw === '' || raw === 'all') return null;
-      const n = parseInt(raw, 10);
-      return Number.isNaN(n) ? null : n;
-    } catch {
-      return null;
-    }
-  });
+  const [companyId, setCompanyIdState] = useState<number | null>(() => readStoredCompanyId());
   const [loading, setLoading] = useState(false);
+
+  // Keep API client scope in sync during render so child mounts/fetches never see a stale company_id
+  if (isSuperAdmin) {
+    api.setCompanyScope(companyId);
+  } else {
+    api.setCompanyScope(null);
+  }
 
   useEffect(() => {
     if (!isSuperAdmin) {
       setCompanies([]);
-      api.setCompanyScope(null);
       return;
     }
     setLoading(true);
@@ -49,17 +63,13 @@ export function CompanyScopeProvider({ children }: { children: ReactNode }) {
   }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (!isSuperAdmin) {
-      api.setCompanyScope(null);
-      return;
-    }
-    api.setCompanyScope(companyId);
-    try {
-      sessionStorage.setItem(STORAGE_KEY, companyId == null ? 'all' : String(companyId));
-    } catch { /* ignore */ }
+    if (!isSuperAdmin) return;
+    persistCompanyId(companyId);
   }, [isSuperAdmin, companyId]);
 
   const setCompanyId = useCallback((id: number | null) => {
+    api.setCompanyScope(id);
+    persistCompanyId(id);
     setCompanyIdState(id);
   }, []);
 
