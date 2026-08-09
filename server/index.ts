@@ -93,6 +93,15 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 // All API routes require auth
 app.use('/api', authMiddleware);
 
+/** Super Admin optional company scope from ?company_id=. null = all companies. */
+function parseCompanyScope(req: express.Request): number | null | undefined {
+  if (req.profile?.role !== 'super_admin') return undefined;
+  const raw = req.query.company_id;
+  if (raw == null || raw === '' || raw === 'all') return null;
+  const n = parseInt(String(raw), 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 // API routes
 app.get('/api/equipment-types', async (_req, res) => {
   try {
@@ -132,7 +141,7 @@ app.delete('/api/equipment-types/:id', async (req, res) => {
 
 app.get('/api/equipment', async (req, res) => {
   try {
-    const data = await db.getAllEquipment(req.profile);
+    const data = await db.getAllEquipment(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -141,7 +150,7 @@ app.get('/api/equipment', async (req, res) => {
 
 app.get('/api/equipment/calibration-status', async (req, res) => {
   try {
-    const data = await db.getCalibrationStatus(req.profile);
+    const data = await db.getCalibrationStatus(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -296,7 +305,7 @@ app.get('/api/equipment/:id/image-url', async (req, res) => {
 
 app.get('/api/sign-outs', async (req, res) => {
   try {
-    const data = await db.getAllSignOuts(req.profile);
+    const data = await db.getAllSignOuts(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -305,7 +314,7 @@ app.get('/api/sign-outs', async (req, res) => {
 
 app.get('/api/sign-outs/active', async (req, res) => {
   try {
-    const data = await db.getActiveSignOuts(req.profile);
+    const data = await db.getActiveSignOuts(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -345,7 +354,7 @@ app.get('/api/sign-outs/date-range', async (req, res) => {
 
 app.get('/api/equipment-tested', async (req, res) => {
   try {
-    const data = await db.getEquipmentTested(req.profile);
+    const data = await db.getEquipmentTested(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -355,7 +364,7 @@ app.get('/api/equipment-tested', async (req, res) => {
 app.get('/api/equipment-tested/:equipmentNumber', async (req, res) => {
   try {
     const equipmentNumber = decodeURIComponent(req.params.equipmentNumber);
-    const data = await db.getEquipmentTestedDetail(req.profile, equipmentNumber);
+    const data = await db.getEquipmentTestedDetail(req.profile, equipmentNumber, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -373,7 +382,7 @@ app.post('/api/sign-outs', async (req, res) => {
 
 app.get('/api/sites', async (req, res) => {
   try {
-    const data = await db.getSitesForProfile(req.profile);
+    const data = await db.getSitesForProfile(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -411,8 +420,18 @@ app.put('/api/sign-outs/:id', async (req, res) => {
 
 app.post('/api/sign-outs/:id/check-in', async (req, res) => {
   try {
-    const { signed_in_by, cal_date, due_date } = req.body as { signed_in_by: string; cal_date?: string | null; due_date?: string | null };
-    await db.checkInSignOut(parseInt(req.params.id, 10), { signed_in_by, cal_date: cal_date ?? null, due_date: due_date ?? null });
+    const { signed_in_by, cal_date, due_date, equipment_number_to_test } = req.body as {
+      signed_in_by: string;
+      cal_date?: string | null;
+      due_date?: string | null;
+      equipment_number_to_test?: string | null;
+    };
+    await db.checkInSignOut(parseInt(req.params.id, 10), {
+      signed_in_by,
+      cal_date: cal_date ?? null,
+      due_date: due_date ?? null,
+      equipment_number_to_test: equipment_number_to_test ?? null,
+    });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -577,7 +596,7 @@ app.delete('/api/calibration-records/:id', async (req, res) => {
 
 app.get('/api/calibration-records', async (req, res) => {
   try {
-    const records = await db.getAllCalibrationRecords(req.profile);
+    const records = await db.getAllCalibrationRecords(req.profile, parseCompanyScope(req));
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -628,7 +647,7 @@ app.post('/api/calibration-records/download-batch', async (req, res) => {
 app.get('/api/equipment-requests', async (req, res) => {
   try {
     const status = req.query.status as 'pending' | 'approved' | 'rejected' | 'fulfilled' | undefined;
-    const data = await db.getEquipmentRequests(status, req.profile);
+    const data = await db.getEquipmentRequests(status, req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -883,7 +902,7 @@ app.delete('/api/admin/sites/:id', adminOnly, async (req, res) => {
 
 app.get('/api/departments', async (req, res) => {
   try {
-    const data = await db.getDepartmentsForProfile(req.profile);
+    const data = await db.getDepartmentsForProfile(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });

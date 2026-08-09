@@ -33,6 +33,7 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId,
   const [calVendor, setCalVendor] = useState('');
   const [signedOutBy, setSignedOutBy] = useState(defaultSignedOutBy);
   const [purpose, setPurpose] = useState('');
+  const [equipmentToTest, setEquipmentToTest] = useState('');
   const [usageItems, setUsageItems] = useState<string[]>(['']);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -71,20 +72,24 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId,
     setError('');
     setSaving(true);
     try {
+      const trimmedUsage = usageItems.map((s) => s.trim()).filter(Boolean);
+      const primaryTested = equipmentToTest.trim() || trimmedUsage[0] || undefined;
       const result = await api.signOuts.create({
         equipment_id: equipmentId,
         signed_out_by: signedOutBy.trim(),
         purpose: signOutType === 'field_use' ? (purpose.trim() || undefined) : undefined,
         sign_out_type: signOutType,
         cal_vendor: signOutType === 'calibration' ? (calVendor.trim() || null) : null,
+        equipment_number_to_test: signOutType === 'field_use' ? (primaryTested ?? null) : null,
       });
       const signOutId = (result as { id: number }).id;
       if (signOutType === 'field_use') {
-        for (const sys of usageItems) {
-          const trimmed = sys.trim();
-          if (trimmed) {
-            await api.usage.add({ sign_out_id: signOutId, system_equipment: trimmed });
-          }
+        for (const trimmed of trimmedUsage) {
+          await api.usage.add({ sign_out_id: signOutId, system_equipment: trimmed });
+        }
+        // If primary tested differs from usage list, still record it as usage for history consistency
+        if (primaryTested && !trimmedUsage.includes(primaryTested)) {
+          await api.usage.add({ sign_out_id: signOutId, system_equipment: primaryTested });
         }
       }
       onSaved();
@@ -187,9 +192,20 @@ export default function SignOutModal({ onClose, onSaved, preSelectedEquipmentId,
                 <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Field mapping for Unit #5" />
               </div>
               <div className="form-group">
-                <label>Used On / Systems (optional)</label>
+                <label>Equipment # / system being tested (optional)</label>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Systems or equipment this item will be used to map/test
+                  Shows on Equipment Tested and in sign-out history
+                </p>
+                <input
+                  value={equipmentToTest}
+                  onChange={(e) => setEquipmentToTest(e.target.value)}
+                  placeholder="e.g. 1114/1115 Incubators"
+                />
+              </div>
+              <div className="form-group">
+                <label>Additional Used On / Systems (optional)</label>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  Other systems or equipment this item will be used to map/test
                 </p>
                 {usageItems.map((item, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>

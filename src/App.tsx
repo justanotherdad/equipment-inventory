@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 're
 import './App.css';
 import { LayoutDashboard, Package, ClipboardList, CalendarCheck, Settings, Menu, Send, Inbox, Shield, Download, LogOut, Key, FlaskConical, Globe } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { CompanyScopeProvider, useCompanyScope } from './contexts/CompanyScopeContext';
 import CompanyAdminOnboarding from './components/CompanyAdminOnboarding';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ScrollToTopButton from './components/ScrollToTopButton';
@@ -43,6 +44,7 @@ function ProtectedLayout() {
   const location = useLocation();
   const mainContentRef = useRef<HTMLElement>(null);
   const { profile, loading, signOut, refreshProfile } = useAuth();
+  const { companyId, companies, setCompanyId } = useCompanyScope();
   const [navOpen, setNavOpen] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<{ needsOnboarding: boolean } | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -130,6 +132,31 @@ function ProtectedLayout() {
             </button>
           </div>
           <nav className={`sidebar-nav ${navOpen ? '' : 'collapsed'}`}>
+            {profile.role === 'super_admin' && (
+              <div className="form-group" style={{ padding: '0.5rem 0.75rem 0.75rem', marginBottom: 0 }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>
+                  Viewing company
+                </label>
+                <select
+                  value={companyId ?? ''}
+                  onChange={(e) => setCompanyId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  style={{
+                    width: '100%',
+                    padding: '0.4rem 0.5rem',
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-primary)',
+                    color: 'inherit',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="">All companies</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {filteredNavItems.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
@@ -183,7 +210,7 @@ function ProtectedLayout() {
           </nav>
         </aside>
         {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
-        <main ref={mainContentRef} className="main-content">
+        <main ref={mainContentRef} className="main-content" key={profile.role === 'super_admin' ? `co-${companyId ?? 'all'}` : 'main'}>
           <ScrollToTopButton scrollContainerRef={mainContentRef} />
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -208,13 +235,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="*" element={<ProtectedLayout />} />
-        </Routes>
+        <CompanyScopeProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="*" element={<ProtectedLayout />} />
+          </Routes>
+        </CompanyScopeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

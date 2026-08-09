@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, Edit, FileText, Plus, Trash2, X } from 'lucide-react
 import { format } from 'date-fns';
 import EquipmentModal from '../components/EquipmentModal';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Equipment {
   id: number;
@@ -11,6 +12,7 @@ interface Equipment {
   calibration_frequency_months?: number | null;
   department_name?: string | null;
   site_name?: string | null;
+  company_name?: string | null;
   make: string;
   model: string;
   serial_number: string;
@@ -153,6 +155,8 @@ function CalRecordRow({
 export default function EquipmentDetail() {
   const { id } = useParams<{ id: string }>();
   const equipmentId = id ? parseInt(id, 10) : 0;
+  const { profile } = useAuth();
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [signOuts, setSignOuts] = useState<SignOut[]>([]);
   const [usagesBySignOut, setUsagesBySignOut] = useState<Record<number, Usage[]>>({});
@@ -330,6 +334,12 @@ export default function EquipmentDetail() {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Equipment Type</div>
               <div>{equipment.equipment_type_name}</div>
             </div>
+            {isSuperAdmin && equipment.company_name && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Company</div>
+                <div>{equipment.company_name}</div>
+              </div>
+            )}
             {(equipment.site_name || equipment.department_name) && (
               <>
                 {equipment.site_name && (

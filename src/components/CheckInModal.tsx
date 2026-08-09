@@ -9,6 +9,7 @@ interface SignOut {
   equipment_serial: string;
   sign_out_type?: 'field_use' | 'calibration' | null;
   cal_frequency_months?: number | null;
+  equipment_number_to_test?: string | null;
 }
 
 interface Props {
@@ -64,17 +65,20 @@ export default function CheckInModal({ signOut, onClose, onSaved }: Props) {
     setError('');
     setSaving(true);
     try {
+      const trimmedUsage = usageItems.map((s) => s.trim()).filter(Boolean);
+      const primaryTested =
+        !isCal && !signOut.equipment_number_to_test?.trim() && trimmedUsage[0]
+          ? trimmedUsage[0]
+          : undefined;
       await api.signOuts.checkIn(signOut.id, {
         signed_in_by: signedInBy.trim(),
         cal_date: isCal && calDate ? calDate : null,
         due_date: isCal && dueDate ? dueDate : null,
+        equipment_number_to_test: primaryTested ?? null,
       });
       if (!isCal) {
-        for (const sys of usageItems) {
-          const trimmed = sys.trim();
-          if (trimmed) {
-            await api.usage.add({ sign_out_id: signOut.id, system_equipment: trimmed });
-          }
+        for (const trimmed of trimmedUsage) {
+          await api.usage.add({ sign_out_id: signOut.id, system_equipment: trimmed });
         }
       }
       onSaved();
@@ -137,7 +141,7 @@ export default function CheckInModal({ signOut, onClose, onSaved }: Props) {
             <div className="form-group">
               <label>Additional Systems Used On (optional)</label>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                Add any systems/equipment used during this sign-out
+                Add systems/equipment tested during this sign-out (also appears on Equipment Tested if not already set)
               </p>
               {usageItems.map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>

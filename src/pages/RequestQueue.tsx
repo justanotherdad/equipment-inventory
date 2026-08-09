@@ -35,6 +35,7 @@ interface EquipmentRequest {
   review_comment: string | null;
   fulfilled_at?: string | null;
   lines?: RequestLine[];
+  company_name?: string | null;
 }
 
 interface EquipmentOpt {
@@ -51,6 +52,7 @@ type Tab = 'pending' | 'approved' | 'fulfilled' | 'all';
 export default function RequestQueue() {
   const { profile } = useAuth();
   const isUser = profile?.role === 'user';
+  const isSuperAdmin = profile?.role === 'super_admin';
   const canManage =
     profile?.role === 'equipment_manager' || profile?.role === 'company_admin' || profile?.role === 'super_admin';
 
@@ -372,6 +374,7 @@ export default function RequestQueue() {
               <tr>
                 <th>Requester</th>
                 <th>Equipment</th>
+                {isSuperAdmin && <th>Company</th>}
                 <th>Building</th>
                 <th>Equipment to Test</th>
                 <th>Dates</th>
@@ -389,6 +392,7 @@ export default function RequestQueue() {
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.requester_phone}</div>
                   </td>
                   <td style={{ maxWidth: 280 }}>{describeRequest(r)}</td>
+                  {isSuperAdmin && <td>{r.company_name ?? '—'}</td>}
                   <td>{r.building}</td>
                   <td>{r.equipment_number_to_test}</td>
                   <td>

@@ -27,6 +27,7 @@ export interface Equipment {
   department_name?: string | null;
   site_name?: string | null;
   company_name?: string | null;
+  company_id?: number | null;
   make: string;
   model: string;
   serial_number: string;
@@ -228,6 +229,46 @@ export class Database {
       }
     }
     return [...new Set(deptIds)];
+  }
+
+  async getDepartmentIdsForCompany(companyId: number): Promise<number[]> {
+    const { data: companySites } = await this.supabase
+      .from('sites')
+      .select('id')
+      .eq('company_id', companyId);
+    const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
+    if (siteIds.length === 0) return [];
+    const { data: companyDepts } = await this.supabase
+      .from('departments')
+      .select('id')
+      .in('site_id', siteIds);
+    return (companyDepts ?? []).map((d: { id: number }) => d.id);
+  }
+
+  /**
+   * Department filter for list endpoints.
+   * null = no filter; [] = nothing visible.
+   * Super Admin may pass companyId to scope; company_admin always scoped to their company.
+   */
+  async resolveListDepartmentFilter(profile?: Profile, companyId?: number | null): Promise<number[] | null> {
+    if (!profile) return null;
+    if (profile.role === 'super_admin') {
+      if (companyId == null || Number.isNaN(Number(companyId))) return null;
+      return this.getDepartmentIdsForCompany(Number(companyId));
+    }
+    if (profile.role === 'company_admin' && profile.company_id) {
+      return this.getDepartmentIdsForCompany(profile.company_id);
+    }
+    return this.getAllowedDepartmentIds(profile);
+  }
+
+  private applyDepartmentFilter<T extends { _department_id?: number | null }>(
+    rows: T[],
+    allowed: number[] | null
+  ): T[] {
+    if (allowed === null) return rows;
+    if (allowed.length === 0) return [];
+    return rows.filter((r) => r._department_id != null && allowed.includes(r._department_id));
   }
 
   /** Returns equipment IDs the profile has equipment-level access to. Empty = no equipment-level restriction. */
@@ -614,31 +655,43 @@ export class Database {
     return (site as { company_id?: number | null })?.company_id === companyId;
   }
 
-  async getDepartmentsForProfile(profile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string }[]> {
+  async getDepartmentsForProfile(profile?: Profile, companyId?: number | null): Promise<{ id: number; site_id: number; name: string; site_name?: string; company_id?: number | null; company_name?: string | null }[]> {
     const all = await this.getDepartments();
-    if (!profile || profile.role === 'super_admin' || profile.role === 'company_admin') return all;
-    const allowed = await this.getAllowedDepartmentIds(profile);
-    if (allowed === null) return all;
+    if (!profile) return all;
+    const allowed = await this.resolveListDepartmentFilter(profile, companyId);
+    if (allowed === null) {
+      if (profile.role === 'super_admin' && (companyId == null || Number.isNaN(Number(companyId)))) return all;
+      return all;
+    }
     if (allowed.length === 0) return [];
     return all.filter((d) => allowed.includes(d.id));
   }
 
-  /** Sites the profile can access (for checkout form). Super/company admin see all; equipment managers see sites from their department access. */
-  async getSitesForProfile(profile?: Profile): Promise<{ id: number; name: string }[]> {
+  /** Sites the profile can access (for checkout form). Super/company admin see all (or scoped company); equipment managers see sites from their department access. */
+  async getSitesForProfile(profile?: Profile, companyId?: number | null): Promise<{ id: number; name: string; company_id?: number | null; company_name?: string | null }[]> {
     if (profile?.role === 'super_admin' || profile?.role === 'company_admin') {
       const sites = await this.getSites(profile);
-      return sites.map((s) => ({ id: s.id, name: s.name }));
+      let list = sites.map((s) => ({ id: s.id, name: s.name, company_id: s.company_id ?? null, company_name: s.company_name ?? null }));
+      if (profile.role === 'super_admin' && companyId != null && !Number.isNaN(Number(companyId))) {
+        list = list.filter((s) => s.company_id === Number(companyId));
+      }
+      return list;
     }
-    const depts = await this.getDepartmentsForProfile(profile);
+    const depts = await this.getDepartmentsForProfile(profile, companyId);
     const siteIds = [...new Set(depts.map((d) => d.site_id))];
     if (siteIds.length === 0) return [];
     const { data, error } = await this.supabase
       .from('sites')
-      .select('id, name')
+      .select('id, name, company_id, companies(name)')
       .in('id', siteIds)
       .order('name');
     if (error) throw error;
-    return (data ?? []) as { id: number; name: string }[];
+    return (data ?? []).map((s: { id: number; name: string; company_id?: number | null; companies?: { name: string } | null }) => ({
+      id: s.id,
+      name: s.name,
+      company_id: s.company_id ?? null,
+      company_name: s.companies?.name ?? null,
+    }));
   }
 
   async getEquipmentTypes(): Promise<EquipmentType[]> {
@@ -688,13 +741,13 @@ export class Database {
     if (error) throw error;
   }
 
-  async getAllEquipment(profile?: Profile): Promise<Equipment[]> {
+  async getAllEquipment(profile?: Profile, companyId?: number | null): Promise<Equipment[]> {
     let q = this.supabase
       .from('equipment')
       .select(`
         *,
         equipment_types(name, calibration_frequency_months),
-        departments(name, sites(name, companies(name)))
+        departments(name, sites(name, company_id, companies(name)))
       `)
       .order('make')
       .order('model');
@@ -702,26 +755,12 @@ export class Database {
     let allowedEquip: number[] = [];
     if (profile) {
       const [allowedDepts, equipIds] = await Promise.all([
-        this.getAllowedDepartmentIds(profile),
+        this.resolveListDepartmentFilter(profile, companyId),
         this.getAllowedEquipmentIds(profile),
       ]);
       allowedEquip = equipIds;
 
-      if (profile.role === 'company_admin' && profile.company_id) {
-        const { data: companySites } = await this.supabase
-          .from('sites')
-          .select('id')
-          .eq('company_id', profile.company_id);
-        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-        if (siteIds.length === 0) return [];
-        const { data: companyDepts } = await this.supabase
-          .from('departments')
-          .select('id')
-          .in('site_id', siteIds);
-        const deptIds = (companyDepts ?? []).map((d: { id: number }) => d.id);
-        if (deptIds.length === 0) return [];
-        q = q.in('department_id', deptIds);
-      } else if (allowedDepts !== null) {
+      if (allowedDepts !== null) {
         if (allowedDepts.length === 0) return [];
         q = q.in('department_id', allowedDepts);
       }
@@ -732,7 +771,7 @@ export class Database {
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const dept = r.departments as {
         name?: string;
-        sites?: { name: string; companies?: { name: string } | null } | null;
+        sites?: { name: string; company_id?: number | null; companies?: { name: string } | null } | null;
       } | null;
       const companyName = dept?.sites?.companies?.name ?? null;
       return {
@@ -742,6 +781,7 @@ export class Database {
         department_name: dept?.name ?? null,
         site_name: dept?.sites?.name ?? null,
         company_name: companyName,
+        company_id: dept?.sites?.company_id ?? null,
         equipment_types: undefined,
         departments: undefined,
       };
@@ -759,7 +799,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name, calibration_frequency_months),
-        departments(name, sites(name, company_id))
+        departments(name, sites(name, company_id, companies(name)))
       `)
       .eq('id', id)
       .single();
@@ -783,7 +823,10 @@ export class Database {
       }
     }
 
-    const dept = data.departments as { name?: string; sites?: { name: string } } | null;
+    const dept = data.departments as {
+      name?: string;
+      sites?: { name: string; company_id?: number | null; companies?: { name: string } | null } | null;
+    } | null;
     const etypes = data.equipment_types as { name: string; calibration_frequency_months?: number | null } | null;
     return {
       ...data,
@@ -791,6 +834,8 @@ export class Database {
       calibration_frequency_months: etypes?.calibration_frequency_months ?? null,
       department_name: dept?.name ?? null,
       site_name: dept?.sites?.name ?? null,
+      company_name: dept?.sites?.companies?.name ?? null,
+      company_id: dept?.sites?.company_id ?? null,
       equipment_types: undefined,
       departments: undefined,
     } as Equipment;
@@ -989,8 +1034,8 @@ export class Database {
     if (error) throw error;
   }
 
-  async getCalibrationStatus(profile?: Profile): Promise<Array<Equipment & { status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'; days_until_due: number | null; cal_vendor?: string | null }>> {
-    const equipment = await this.getAllEquipment(profile);
+  async getCalibrationStatus(profile?: Profile, companyId?: number | null): Promise<Array<Equipment & { status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'; days_until_due: number | null; cal_vendor?: string | null }>> {
+    const equipment = await this.getAllEquipment(profile, companyId);
     // Fetch active calibration sign-outs so we can mark equipment accordingly
     const { data: calSignOuts } = await this.supabase
       .from('sign_outs')
@@ -1018,48 +1063,41 @@ export class Database {
     });
   }
 
-  async getAllSignOuts(profile?: Profile): Promise<SignOut[]> {
+  async getAllSignOuts(profile?: Profile, companyId?: number | null): Promise<SignOut[]> {
     const { data, error } = await this.supabase
       .from('sign_outs')
       .select(`
         *,
         sign_out_type,
         cal_vendor,
-        equipment(make, model, serial_number, equipment_number, department_id)
+        equipment(make, model, serial_number, equipment_number, department_id, departments(sites(name, company_id, companies(name))))
       `)
       .order('signed_out_at', { ascending: false });
     if (error) throw error;
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const eq = r.equipment as { make: string; model: string; serial_number: string; equipment_number?: string; department_id?: number | null };
+      const eq = r.equipment as {
+        make: string;
+        model: string;
+        serial_number: string;
+        equipment_number?: string;
+        department_id?: number | null;
+        departments?: { sites?: { name?: string; company_id?: number | null; companies?: { name: string } | null } | null } | null;
+      };
       return {
         ...r,
         equipment_make: eq?.make,
         equipment_model: eq?.model,
         equipment_serial: eq?.serial_number,
         equipment_equipment_number: eq?.equipment_number,
+        company_name: eq?.departments?.sites?.companies?.name ?? null,
+        company_id: eq?.departments?.sites?.company_id ?? null,
+        site_name: eq?.departments?.sites?.name ?? null,
         equipment: undefined,
         _department_id: eq?.department_id,
       };
     });
     if (profile) {
-      let allowed: number[] | null;
-      if (profile.role === 'company_admin' && profile.company_id) {
-        const { data: companySites } = await this.supabase
-          .from('sites')
-          .select('id')
-          .eq('company_id', profile.company_id);
-        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-        if (siteIds.length === 0) allowed = [];
-        else {
-          const { data: companyDepts } = await this.supabase
-            .from('departments')
-            .select('id')
-            .in('site_id', siteIds);
-          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
-        }
-      } else {
-        allowed = await this.getAllowedDepartmentIds(profile);
-      }
+      const allowed = await this.resolveListDepartmentFilter(profile, companyId);
       if (allowed !== null && allowed.length > 0) {
         rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
       } else if (allowed !== null) {
@@ -1072,8 +1110,8 @@ export class Database {
     }) as SignOut[];
   }
 
-  async getActiveSignOuts(profile?: Profile): Promise<SignOut[]> {
-    const all = await this.getAllSignOuts(profile);
+  async getActiveSignOuts(profile?: Profile, companyId?: number | null): Promise<SignOut[]> {
+    const all = await this.getAllSignOuts(profile, companyId);
     return all.filter((s) => !s.signed_in_at);
   }
 
@@ -1217,19 +1255,32 @@ export class Database {
     return { checkout_id: checkoutId, sign_out_ids: signOutIds };
   }
 
-  async checkInSignOut(id: number, data: { signed_in_by: string; cal_date?: string | null; due_date?: string | null }) {
-    // 1. Fetch the sign-out to get equipment_id
+  async checkInSignOut(id: number, data: {
+    signed_in_by: string;
+    cal_date?: string | null;
+    due_date?: string | null;
+    equipment_number_to_test?: string | null;
+  }) {
+    // 1. Fetch the sign-out to get equipment_id and existing tested number
     const { data: so, error: fetchErr } = await this.supabase
       .from('sign_outs')
-      .select('equipment_id')
+      .select('equipment_id, equipment_number_to_test')
       .eq('id', id)
       .single();
     if (fetchErr || !so) throw new Error('Sign-out not found');
 
-    // 2. Mark as checked in
+    // 2. Mark as checked in; optionally set equipment_number_to_test if still empty
+    const updatePayload: Record<string, unknown> = {
+      signed_in_by: data.signed_in_by,
+      signed_in_at: new Date().toISOString(),
+    };
+    const existingTested = (so as { equipment_number_to_test?: string | null }).equipment_number_to_test;
+    if (!existingTested?.trim() && data.equipment_number_to_test?.trim()) {
+      updatePayload.equipment_number_to_test = data.equipment_number_to_test.trim();
+    }
     const { error } = await this.supabase
       .from('sign_outs')
-      .update({ signed_in_by: data.signed_in_by, signed_in_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', id);
     if (error) throw error;
 
@@ -1275,43 +1326,35 @@ export class Database {
     return data ?? [];
   }
 
-  async getAllCalibrationRecords(profile?: Profile): Promise<Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null }>> {
+  async getAllCalibrationRecords(profile?: Profile, companyId?: number | null): Promise<Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null; company_name?: string | null; company_id?: number | null }>> {
     const { data, error } = await this.supabase
       .from('calibration_records')
-      .select('*, equipment(make, model, serial_number, equipment_number, department_id)')
+      .select('*, equipment(make, model, serial_number, equipment_number, department_id, departments(sites(company_id, companies(name))))')
       .order('uploaded_at', { ascending: false });
     if (error) throw error;
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const eq = (r.equipment || {}) as { make?: string; model?: string; serial_number?: string; equipment_number?: string; department_id?: number | null };
+      const eq = (r.equipment || {}) as {
+        make?: string;
+        model?: string;
+        serial_number?: string;
+        equipment_number?: string;
+        department_id?: number | null;
+        departments?: { sites?: { company_id?: number | null; companies?: { name: string } | null } | null } | null;
+      };
       return {
         ...r,
         equipment_make: eq.make,
         equipment_model: eq.model,
         equipment_serial: eq.serial_number,
         equipment_number: eq.equipment_number,
+        company_name: eq.departments?.sites?.companies?.name ?? null,
+        company_id: eq.departments?.sites?.company_id ?? null,
         equipment: undefined,
         _department_id: eq.department_id,
       };
     });
     if (profile) {
-      let allowed: number[] | null;
-      if (profile.role === 'company_admin' && profile.company_id) {
-        const { data: companySites } = await this.supabase
-          .from('sites')
-          .select('id')
-          .eq('company_id', profile.company_id);
-        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-        if (siteIds.length === 0) allowed = [];
-        else {
-          const { data: companyDepts } = await this.supabase
-            .from('departments')
-            .select('id')
-            .in('site_id', siteIds);
-          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
-        }
-      } else {
-        allowed = await this.getAllowedDepartmentIds(profile);
-      }
+      const allowed = await this.resolveListDepartmentFilter(profile, companyId);
       if (allowed !== null && allowed.length > 0) {
         rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
       } else if (allowed !== null) {
@@ -1321,7 +1364,7 @@ export class Database {
     return rows.map((r: Record<string, unknown>) => {
       const { _department_id, ...rest } = r;
       return rest;
-    }) as Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null }>;
+    }) as Array<CalibrationRecord & { equipment_make?: string; equipment_model?: string; equipment_serial?: string; equipment_number?: string | null; company_name?: string | null; company_id?: number | null }>;
   }
 
   async getCalibrationRecordById(id: number): Promise<CalibrationRecord | undefined> {
@@ -1400,14 +1443,15 @@ export class Database {
 
   async getEquipmentRequests(
     status?: 'pending' | 'approved' | 'rejected' | 'fulfilled',
-    profile?: Profile
+    profile?: Profile,
+    companyId?: number | null
   ): Promise<EquipmentRequest[]> {
     let q = this.supabase
       .from('equipment_requests')
       .select(
         `
         *,
-        equipment(make, model, serial_number, equipment_number, department_id),
+        equipment(make, model, serial_number, equipment_number, department_id, departments(sites(name, company_id, companies(name)))),
         equipment_request_lines(
           id,
           equipment_request_id,
@@ -1423,29 +1467,25 @@ export class Database {
     if (status) q = q.eq('status', status);
     const { data, error } = await q;
     if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => this.mapEquipmentRequestRow(r));
+    let rows = (data ?? []).map((r: Record<string, unknown>) => {
+      const mapped = this.mapEquipmentRequestRow(r) as EquipmentRequest & {
+        _department_id?: number | null;
+        company_name?: string | null;
+        company_id?: number | null;
+      };
+      const eq = r.equipment as {
+        department_id?: number | null;
+        departments?: { sites?: { name?: string; company_id?: number | null; companies?: { name: string } | null } | null } | null;
+      } | null;
+      mapped.company_name = eq?.departments?.sites?.companies?.name ?? null;
+      mapped.company_id = eq?.departments?.sites?.company_id ?? null;
+      return mapped;
+    });
     if (profile) {
       if (profile.role === 'user') {
         rows = rows.filter((r: { requester_email?: string }) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
       } else {
-        let allowed: number[] | null;
-        if (profile.role === 'company_admin' && profile.company_id) {
-          const { data: companySites } = await this.supabase
-            .from('sites')
-            .select('id')
-            .eq('company_id', profile.company_id);
-          const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-          if (siteIds.length === 0) allowed = [];
-          else {
-            const { data: companyDepts } = await this.supabase
-              .from('departments')
-              .select('id')
-              .in('site_id', siteIds);
-            allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
-          }
-        } else {
-          allowed = await this.getAllowedDepartmentIds(profile);
-        }
+        const allowed = await this.resolveListDepartmentFilter(profile, companyId);
         if (allowed !== null && allowed.length > 0) {
           rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
         } else if (allowed !== null) {
@@ -1966,16 +2006,33 @@ export class Database {
     if (error) throw error;
   }
 
-  /** Equipment tested: sign_outs with equipment_number_to_test, with site from equipment's department */
-  async getEquipmentTested(profile?: Profile): Promise<Array<{
+  /** Equipment tested: from equipment_number_to_test and/or usage.system_equipment */
+  async getEquipmentTested(profile?: Profile, companyId?: number | null): Promise<Array<{
     equipment_number_to_test: string;
     tested_equipment_type: string | null;
     site_name: string | null;
     building: string | null;
     room_number: string | null;
     last_tested_at: string;
+    company_name?: string | null;
+    company_id?: number | null;
   }>> {
-    const { data, error } = await this.supabase
+    type Candidate = {
+      equipment_number_to_test: string;
+      tested_equipment_type: string | null;
+      site_name: string | null;
+      building: string | null;
+      room_number: string | null;
+      signed_out_at: string;
+      _department_id?: number | null;
+      company_name?: string | null;
+      company_id?: number | null;
+    };
+
+    const siteSelect = 'name, company_id, companies(name)';
+    const equipSelect = `department_id, departments(sites(${siteSelect}))`;
+
+    const { data: directData, error: directErr } = await this.supabase
       .from('sign_outs')
       .select(`
         equipment_number_to_test,
@@ -1983,52 +2040,89 @@ export class Database {
         building,
         room_number,
         signed_out_at,
-        equipment(department_id, departments(sites(name)))
+        equipment(${equipSelect})
       `)
       .not('equipment_number_to_test', 'is', null)
       .order('signed_out_at', { ascending: false });
-    if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const eq = r.equipment as { department_id?: number; departments?: { sites?: { name: string } } } | null;
-      const siteName = eq?.departments?.sites?.name ?? null;
+    if (directErr) throw directErr;
+
+    const mapEquipSite = (eq: {
+      department_id?: number;
+      departments?: { sites?: { name: string; company_id?: number | null; companies?: { name: string } | null } | null } | null;
+    } | null | undefined) => {
+      const site = eq?.departments?.sites;
       return {
-        equipment_number_to_test: r.equipment_number_to_test as string,
-        tested_equipment_type: (r.tested_equipment_type as string) ?? null,
-        site_name: siteName,
-        building: (r.building as string) ?? null,
-        room_number: (r.room_number as string) ?? null,
-        signed_out_at: r.signed_out_at as string,
+        site_name: site?.name ?? null,
+        company_name: site?.companies?.name ?? null,
+        company_id: site?.company_id ?? null,
         _department_id: eq?.department_id,
       };
-    });
-    if (profile) {
-      let allowed: number[] | null;
-      if (profile.role === 'company_admin' && profile.company_id) {
-        const { data: companySites } = await this.supabase
-          .from('sites')
-          .select('id')
-          .eq('company_id', profile.company_id);
-        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-        if (siteIds.length === 0) allowed = [];
-        else {
-          const { data: companyDepts } = await this.supabase
-            .from('departments')
-            .select('id')
-            .in('site_id', siteIds);
-          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
-        }
-      } else {
-        allowed = await this.getAllowedDepartmentIds(profile);
-      }
-      if (allowed !== null && allowed.length > 0) {
-        rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
-      } else if (allowed !== null) {
-        rows = [];
-      }
+    };
+
+    let candidates: Candidate[] = (directData ?? [])
+      .filter((r: Record<string, unknown>) => String(r.equipment_number_to_test ?? '').trim())
+      .map((r: Record<string, unknown>) => {
+        const eq = r.equipment as Parameters<typeof mapEquipSite>[0];
+        const siteInfo = mapEquipSite(eq);
+        return {
+          equipment_number_to_test: String(r.equipment_number_to_test).trim(),
+          tested_equipment_type: (r.tested_equipment_type as string) ?? null,
+          building: (r.building as string) ?? null,
+          room_number: (r.room_number as string) ?? null,
+          signed_out_at: r.signed_out_at as string,
+          ...siteInfo,
+        };
+      });
+
+    // Also include usage.system_equipment as tested identifiers (covers Sign Out / Check In history)
+    const { data: usageData, error: usageErr } = await this.supabase
+      .from('usage')
+      .select(`
+        system_equipment,
+        sign_outs(
+          tested_equipment_type,
+          building,
+          room_number,
+          signed_out_at,
+          equipment(${equipSelect})
+        )
+      `)
+      .order('id', { ascending: false });
+    if (usageErr) throw usageErr;
+
+    for (const u of usageData ?? []) {
+      const tested = String((u as { system_equipment?: string }).system_equipment ?? '').trim();
+      if (!tested) continue;
+      const so = (u as { sign_outs?: Record<string, unknown> | null }).sign_outs;
+      if (!so) continue;
+      const eq = so.equipment as Parameters<typeof mapEquipSite>[0];
+      const siteInfo = mapEquipSite(eq);
+      candidates.push({
+        equipment_number_to_test: tested,
+        tested_equipment_type: (so.tested_equipment_type as string) ?? null,
+        building: (so.building as string) ?? null,
+        room_number: (so.room_number as string) ?? null,
+        signed_out_at: so.signed_out_at as string,
+        ...siteInfo,
+      });
     }
+
+    const allowed = await this.resolveListDepartmentFilter(profile, companyId);
+    candidates = this.applyDepartmentFilter(candidates, allowed);
+    candidates.sort((a, b) => String(b.signed_out_at).localeCompare(String(a.signed_out_at)));
+
     const seen = new Set<string>();
-    const result: Array<{ equipment_number_to_test: string; tested_equipment_type: string | null; site_name: string | null; building: string | null; room_number: string | null; last_tested_at: string }> = [];
-    for (const r of rows) {
+    const result: Array<{
+      equipment_number_to_test: string;
+      tested_equipment_type: string | null;
+      site_name: string | null;
+      building: string | null;
+      room_number: string | null;
+      last_tested_at: string;
+      company_name?: string | null;
+      company_id?: number | null;
+    }> = [];
+    for (const r of candidates) {
       const key = `${r.equipment_number_to_test}|${r.site_name ?? ''}|${r.building ?? ''}|${r.room_number ?? ''}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -2039,15 +2133,18 @@ export class Database {
         building: r.building,
         room_number: r.room_number,
         last_tested_at: r.signed_out_at,
+        company_name: r.company_name ?? null,
+        company_id: r.company_id ?? null,
       });
     }
     return result;
   }
 
-  /** Detail for one equipment number tested: all sign_outs, equipment used, dates, locations */
+  /** Detail for one equipment number tested: matches equipment_number_to_test or usage.system_equipment */
   async getEquipmentTestedDetail(
     profile: Profile | undefined,
-    equipmentNumber: string
+    equipmentNumber: string,
+    companyId?: number | null
   ): Promise<{
     equipment_number_to_test: string;
     tests: Array<{
@@ -2061,7 +2158,10 @@ export class Database {
       usage_equipment: string[];
     }>;
   }> {
-    const { data, error } = await this.supabase
+    const target = equipmentNumber.trim();
+    const equipSelect = 'id, make, model, serial_number, equipment_number, department_id, departments(sites(name, company_id, companies(name))), equipment_types(name)';
+
+    const { data: byField, error: fieldErr } = await this.supabase
       .from('sign_outs')
       .select(`
         id,
@@ -2069,39 +2169,51 @@ export class Database {
         signed_in_at,
         building,
         room_number,
-        equipment(id, make, model, serial_number, equipment_number, department_id, departments(sites(name)), equipment_types(name))
+        equipment(${equipSelect})
       `)
-      .eq('equipment_number_to_test', equipmentNumber)
+      .eq('equipment_number_to_test', target)
       .order('signed_out_at', { ascending: false });
-    if (error) throw error;
-    let rows = data ?? [];
-    if (profile) {
-      let allowed: number[] | null;
-      if (profile.role === 'company_admin' && profile.company_id) {
-        const { data: companySites } = await this.supabase
-          .from('sites')
-          .select('id')
-          .eq('company_id', profile.company_id);
-        const siteIds = (companySites ?? []).map((s: { id: number }) => s.id);
-        if (siteIds.length === 0) allowed = [];
-        else {
-          const { data: companyDepts } = await this.supabase
-            .from('departments')
-            .select('id')
-            .in('site_id', siteIds);
-          allowed = (companyDepts ?? []).map((d: { id: number }) => d.id);
-        }
-      } else {
-        allowed = await this.getAllowedDepartmentIds(profile);
-      }
-      if (allowed !== null && allowed.length > 0) {
-        rows = rows.filter((r: { equipment?: { department_id?: number | null } }) =>
-          r.equipment?.department_id != null && allowed!.includes(r.equipment.department_id)
-        );
-      } else if (allowed !== null) {
-        rows = [];
+    if (fieldErr) throw fieldErr;
+
+    const { data: usageMatches, error: usageErr } = await this.supabase
+      .from('usage')
+      .select(`
+        sign_out_id,
+        sign_outs(
+          id,
+          signed_out_at,
+          signed_in_at,
+          building,
+          room_number,
+          equipment(${equipSelect})
+        )
+      `)
+      .eq('system_equipment', target);
+    if (usageErr) throw usageErr;
+
+    const byId = new Map<number, Record<string, unknown>>();
+    for (const r of byField ?? []) {
+      byId.set((r as { id: number }).id, r as Record<string, unknown>);
+    }
+    for (const u of usageMatches ?? []) {
+      const so = (u as { sign_outs?: Record<string, unknown> | null }).sign_outs;
+      if (!so?.id) continue;
+      byId.set(so.id as number, so);
+    }
+
+    let rows = [...byId.values()];
+    const allowed = await this.resolveListDepartmentFilter(profile, companyId);
+    if (allowed !== null) {
+      if (allowed.length === 0) rows = [];
+      else {
+        rows = rows.filter((r) => {
+          const eq = r.equipment as { department_id?: number | null } | null;
+          return eq?.department_id != null && allowed.includes(eq.department_id);
+        });
       }
     }
+    rows.sort((a, b) => String(b.signed_out_at).localeCompare(String(a.signed_out_at)));
+
     const tests: Array<{
       sign_out_id: number;
       signed_out_at: string;
@@ -2109,20 +2221,28 @@ export class Database {
       site_name: string | null;
       building: string | null;
       room_number: string | null;
-      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null }>;
+      equipment_used: Array<{ id: number; make: string; model: string; serial_number: string; equipment_number: string | null; equipment_type_name: string | null }>;
       usage_equipment: string[];
     }> = [];
     for (const r of rows) {
-      const eq = r.equipment as { id?: number; make: string; model: string; serial_number: string; equipment_number?: string | null; departments?: { sites?: { name: string } }; equipment_types?: { name: string } | null };
+      const eq = r.equipment as {
+        id?: number;
+        make: string;
+        model: string;
+        serial_number: string;
+        equipment_number?: string | null;
+        departments?: { sites?: { name: string } };
+        equipment_types?: { name: string } | null;
+      };
       const siteName = eq?.departments?.sites?.name ?? null;
-      const usageRows = await this.getUsageBySignOut(r.id);
+      const usageRows = await this.getUsageBySignOut(r.id as number);
       tests.push({
-        sign_out_id: r.id,
-        signed_out_at: r.signed_out_at,
-        signed_in_at: r.signed_in_at,
+        sign_out_id: r.id as number,
+        signed_out_at: r.signed_out_at as string,
+        signed_in_at: (r.signed_in_at as string | null) ?? null,
         site_name: siteName,
-        building: r.building ?? null,
-        room_number: r.room_number ?? null,
+        building: (r.building as string | null) ?? null,
+        room_number: (r.room_number as string | null) ?? null,
         equipment_used: [{
           id: eq?.id ?? 0,
           make: eq?.make ?? '',
@@ -2134,6 +2254,6 @@ export class Database {
         usage_equipment: usageRows.map((u) => u.system_equipment),
       });
     }
-    return { equipment_number_to_test: equipmentNumber, tests };
+    return { equipment_number_to_test: target, tests };
   }
 }

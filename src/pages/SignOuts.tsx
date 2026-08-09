@@ -40,11 +40,13 @@ interface SignOut {
   cal_frequency_months?: number | null;
   date_from?: string | null;
   date_to?: string | null;
+  company_name?: string | null;
 }
 
 export default function SignOuts() {
   const { profile } = useAuth();
   const canEditDates = profile?.role === 'equipment_manager' || profile?.role === 'company_admin' || profile?.role === 'super_admin';
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [activeSignOuts, setActiveSignOuts] = useState<SignOut[]>([]);
   const [allSignOuts, setAllSignOuts] = useState<SignOut[]>([]);
   const [tab, setTab] = useState<'active' | 'history'>('active');
@@ -250,6 +252,7 @@ export default function SignOuts() {
                   </th>
                 )}
                 <th>Equipment</th>
+                {isSuperAdmin && <th>Company</th>}
                 <th>Signed Out</th>
                 <th>By</th>
                 <th>Purpose</th>
@@ -281,6 +284,7 @@ export default function SignOuts() {
                       {s.equipment_equipment_number ? ` (#${s.equipment_equipment_number})` : ` (S/N: ${s.equipment_serial})`}
                     </Link>
                   </td>
+                  {isSuperAdmin && <td>{s.company_name ?? '—'}</td>}
                   <td>{format(new Date(s.signed_out_at), 'MMM d, yyyy HH:mm')}</td>
                   <td>{s.signed_out_by}</td>
                   <td>{s.purpose ?? '—'}</td>
@@ -348,6 +352,12 @@ export default function SignOuts() {
                   </Link>
                 </span>
               </div>
+              {isSuperAdmin && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Company</span>
+                  <span className="mobile-card-value">{s.company_name ?? '—'}</span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">By</span>
                 <span className="mobile-card-value">{s.signed_out_by}</span>

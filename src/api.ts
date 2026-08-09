@@ -7,6 +7,35 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+/** Super Admin company scope for list APIs. null = all companies. */
+let companyScopeId: number | null = null;
+export function setCompanyScope(companyId: number | null) {
+  companyScopeId = companyId;
+}
+
+const SCOPED_GET_PREFIXES = [
+  '/api/equipment',
+  '/api/sign-outs',
+  '/api/equipment-tested',
+  '/api/sites',
+  '/api/departments',
+  '/api/calibration-records',
+  '/api/equipment-requests',
+];
+
+function withCompanyScope(path: string, method?: string): string {
+  const m = (method ?? 'GET').toUpperCase();
+  if (m !== 'GET') return path;
+  if (!SCOPED_GET_PREFIXES.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'))) {
+    return path;
+  }
+  // Don't scope admin/platform company management or auth
+  if (path.startsWith('/api/admin/') || path.startsWith('/api/auth/')) return path;
+  const sep = path.includes('?') ? '&' : '?';
+  if (companyScopeId == null) return `${path}${sep}company_id=all`;
+  return `${path}${sep}company_id=${companyScopeId}`;
+}
+
 /** Fetch a URL with auth header (for endpoints that require it, e.g. file downloads) */
 export async function fetchWithAuth(url: string, options?: RequestInit): Promise<Response> {
   const headers: Record<string, string> = { ...(options?.headers as Record<string, string> ?? {}) };
@@ -21,7 +50,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const scopedPath = withCompanyScope(path, options?.method);
+  const res = await fetch(`${API_BASE}${scopedPath}`, {
     ...options,
     headers,
   });
@@ -35,6 +65,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   setAuthToken,
+  setCompanyScope,
   auth: {
     getProfile: () => request<{ id: number; auth_user_id: string; email: string; display_name: string | null; phone: string | null; role: 'user' | 'equipment_manager' | 'company_admin' | 'super_admin' }>('/api/auth/me'),
   },
@@ -145,7 +176,7 @@ export const api = {
     create: (data: object) => request('/api/sign-outs', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: { signed_out_at?: string; date_from?: string | null; date_to?: string | null }) =>
       request(`/api/sign-outs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    checkIn: (id: number, data: { signed_in_by: string; cal_date?: string | null; due_date?: string | null }) =>
+    checkIn: (id: number, data: { signed_in_by: string; cal_date?: string | null; due_date?: string | null; equipment_number_to_test?: string | null }) =>
       request(`/api/sign-outs/${id}/check-in`, { method: 'POST', body: JSON.stringify(data) }),
   },
   notifications: {

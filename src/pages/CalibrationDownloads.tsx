@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Download, FileText } from 'lucide-react';
 import { api, fetchWithAuth } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -17,9 +18,12 @@ interface CalRecord {
   equipment_model?: string;
   equipment_serial?: string;
   equipment_number?: string | null;
+  company_name?: string | null;
 }
 
 export default function CalibrationDownloads() {
+  const { profile } = useAuth();
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [records, setRecords] = useState<CalRecord[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [downloading, setDownloading] = useState(false);
@@ -114,6 +118,7 @@ export default function CalibrationDownloads() {
                   <tr>
                     <th style={{ width: '40px' }}></th>
                     <th>Equipment</th>
+                    {isSuperAdmin && <th>Company</th>}
                     <th>File</th>
                     <th>Cal Date</th>
                     <th>Due Date</th>
@@ -137,6 +142,7 @@ export default function CalibrationDownloads() {
                           {r.equipment_number ? ` (#${r.equipment_number})` : r.equipment_serial ? ` (S/N: ${r.equipment_serial})` : ''}
                         </Link>
                       </td>
+                      {isSuperAdmin && <td>{r.company_name ?? '—'}</td>}
                       <td>
                         <FileText size={16} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
                         <button

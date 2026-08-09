@@ -17,9 +17,10 @@ interface CalStatus {
   status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal';
   days_until_due: number | null;
   cal_vendor?: string | null;
+  company_name?: string | null;
 }
 
-type SortKey = 'status' | 'equipment_type_name' | 'equipment' | 'serial_number' | 'last_calibration_date' | 'next_calibration_due';
+type SortKey = 'status' | 'equipment_type_name' | 'equipment' | 'serial_number' | 'last_calibration_date' | 'next_calibration_due' | 'company_name';
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'next_calibration_due', label: 'Cal Due Date' },
   { key: 'serial_number', label: 'Serial #' },
@@ -34,6 +35,7 @@ const STATUS_ORDER = { due: 0, due_soon: 1, ok: 2, 'n/a': 3, out_for_cal: 4 };
 export default function CalibrationStatus() {
   const { profile } = useAuth();
   const canManage = profile?.role === 'super_admin' || profile?.role === 'company_admin' || profile?.role === 'equipment_manager';
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [items, setItems] = useState<CalStatus[]>([]);
   const [filter, setFilter] = useState<'all' | 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('next_calibration_due');
@@ -67,6 +69,8 @@ export default function CalibrationStatus() {
         cmp = am.localeCompare(bm);
       } else if (sortKey === 'serial_number') {
         cmp = (a.serial_number || '').localeCompare(b.serial_number || '');
+      } else if (sortKey === 'company_name') {
+        cmp = (a.company_name || '').localeCompare(b.company_name || '');
       } else if (sortKey === 'last_calibration_date' || sortKey === 'next_calibration_due') {
         const da = (a[sortKey] ? new Date(a[sortKey]!).getTime() : 0);
         const db = (b[sortKey] ? new Date(b[sortKey]!).getTime() : 0);
@@ -184,6 +188,9 @@ export default function CalibrationStatus() {
                 <th className="sortable" onClick={() => handleSort('status')}>Status {sortKey === 'status' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('equipment_type_name')}>Type {sortKey === 'equipment_type_name' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('equipment')}>Equipment {sortKey === 'equipment' && (sortAsc ? '↑' : '↓')}</th>
+                {isSuperAdmin && (
+                  <th className="sortable" onClick={() => handleSort('company_name')}>Company {sortKey === 'company_name' && (sortAsc ? '↑' : '↓')}</th>
+                )}
                 <th className="sortable" onClick={() => handleSort('serial_number')}>Serial # {sortKey === 'serial_number' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('last_calibration_date')}>Last Calibration {sortKey === 'last_calibration_date' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('next_calibration_due')}>Next Due {sortKey === 'next_calibration_due' && (sortAsc ? '↑' : '↓')}</th>
@@ -200,6 +207,7 @@ export default function CalibrationStatus() {
                     </Link>
                   </td>
                   <td>{item.make} {item.model}</td>
+                  {isSuperAdmin && <td>{item.company_name ?? '—'}</td>}
                   <td>{item.serial_number}</td>
                   <td>{item.last_calibration_date ? format(new Date(item.last_calibration_date), 'MMM d, yyyy') : '—'}</td>
                   <td>{item.next_calibration_due ? format(new Date(item.next_calibration_due), 'MMM d, yyyy') : '—'}</td>
@@ -241,6 +249,12 @@ export default function CalibrationStatus() {
                 <span className="mobile-card-label">Equipment</span>
                 <span className="mobile-card-value">{item.make} {item.model}</span>
               </div>
+              {isSuperAdmin && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Company</span>
+                  <span className="mobile-card-value">{item.company_name ?? '—'}</span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Serial #</span>
                 <span className="mobile-card-value">{item.serial_number}</span>

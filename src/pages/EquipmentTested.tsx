@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, X, Download, FileText } from 'lucide-react';
 import { api } from '../api';
 import { buildCsvRow } from '../utils/csvExport';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EquipmentTestedRow {
   equipment_number_to_test: string;
@@ -11,6 +12,8 @@ interface EquipmentTestedRow {
   building: string | null;
   room_number: string | null;
   last_tested_at: string;
+  company_name?: string | null;
+  company_id?: number | null;
 }
 
 interface TestDetail {
@@ -31,7 +34,7 @@ interface TestDetail {
   usage_equipment: string[];
 }
 
-type SortKey = 'equipment_number_to_test' | 'tested_equipment_type' | 'site_name' | 'building' | 'room_number' | 'last_tested_at';
+type SortKey = 'equipment_number_to_test' | 'tested_equipment_type' | 'company_name' | 'site_name' | 'building' | 'room_number' | 'last_tested_at';
 
 function formatDateMed(d: string) {
   return new Date(d).toLocaleDateString('default', { dateStyle: 'medium' });
@@ -55,6 +58,7 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
   const header = buildCsvRow([
     'Equipment # Tested',
     'Equipment Type',
+    'Company',
     'Date Used',
     'Returned',
     'Site',
@@ -71,11 +75,13 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
   const details = await buildDetailRows(rows);
   for (const { row, detail } of details) {
     const testedType = row.tested_equipment_type ?? '';
+    const company = row.company_name ?? '';
     for (const test of detail.tests) {
       if (test.equipment_used.length === 0 && test.usage_equipment.length === 0) {
         csvRows.push(buildCsvRow([
           detail.equipment_number_to_test,
           testedType,
+          company,
           formatDateMed(test.signed_out_at),
           test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
           test.site_name ?? '',
@@ -88,6 +94,7 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
           csvRows.push(buildCsvRow([
             detail.equipment_number_to_test,
             testedType,
+            company,
             formatDateMed(test.signed_out_at),
             test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
             test.site_name ?? '',
@@ -104,6 +111,7 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
           csvRows.push(buildCsvRow([
             detail.equipment_number_to_test,
             testedType,
+            company,
             formatDateMed(test.signed_out_at),
             test.signed_in_at ? formatDateMed(test.signed_in_at) : '',
             test.site_name ?? '',
@@ -129,7 +137,8 @@ async function exportCsv(rows: EquipmentTestedRow[], filename: string) {
 async function exportPdf(rows: EquipmentTestedRow[], title: string) {
   const details = await buildDetailRows(rows);
 
-  const sections = details.map(({ detail }) => {
+  const sections = details.map(({ row, detail }) => {
+    const companyLine = row.company_name ? `<div class="subtitle" style="margin-bottom:8px">Company: ${row.company_name}</div>` : '';
     const testBlocks = detail.tests.map((test) => {
       const equipRows = [
         ...test.equipment_used.map((eq) =>
@@ -163,6 +172,7 @@ async function exportPdf(rows: EquipmentTestedRow[], title: string) {
     return `
       <div class="equip-section">
         <h2>Equipment #${detail.equipment_number_to_test}</h2>
+        ${companyLine}
         ${testBlocks || '<p>No test records.</p>'}
       </div>`;
   }).join('');
@@ -198,6 +208,8 @@ ${sections}
 }
 
 export default function EquipmentTested() {
+  const { profile } = useAuth();
+  const isSuperAdmin = profile?.role === 'super_admin';
   const [rows, setRows] = useState<EquipmentTestedRow[]>([]);
   const [selectedEquip, setSelectedEquip] = useState<Set<string>>(new Set());
   const [filterEquip, setFilterEquip] = useState('');
@@ -322,7 +334,7 @@ export default function EquipmentTested() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2>Equipment Tested</h2>
-          <p>Equipment numbers that have been tested, with locations</p>
+          <p>Equipment/systems that were tested (from checkout “to test” or “used on”), with locations</p>
         </div>
         {selectedEquip.size > 0 && (
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -418,6 +430,11 @@ export default function EquipmentTested() {
                 <th className="sortable" onClick={() => handleSort('tested_equipment_type')}>
                   Equipment Type {sortKey === 'tested_equipment_type' && (sortAsc ? '↑' : '↓')}
                 </th>
+                {isSuperAdmin && (
+                  <th className="sortable" onClick={() => handleSort('company_name')}>
+                    Company {sortKey === 'company_name' && (sortAsc ? '↑' : '↓')}
+                  </th>
+                )}
                 <th className="sortable" onClick={() => handleSort('site_name')}>
                   Site {sortKey === 'site_name' && (sortAsc ? '↑' : '↓')}
                 </th>
@@ -455,6 +472,7 @@ export default function EquipmentTested() {
                     </button>
                   </td>
                   <td>{r.tested_equipment_type ?? '—'}</td>
+                  {isSuperAdmin && <td>{r.company_name ?? '—'}</td>}
                   <td>{r.site_name ?? '—'}</td>
                   <td>{r.building ?? '—'}</td>
                   <td>{r.room_number ?? '—'}</td>
@@ -525,6 +543,12 @@ export default function EquipmentTested() {
                 <span className="mobile-card-label">Equipment Type</span>
                 <span className="mobile-card-value">{r.tested_equipment_type ?? '—'}</span>
               </div>
+              {isSuperAdmin && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Company</span>
+                  <span className="mobile-card-value">{r.company_name ?? '—'}</span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Site</span>
                 <span className="mobile-card-value">{r.site_name ?? '—'}</span>
@@ -575,7 +599,7 @@ export default function EquipmentTested() {
 
         {filtered.length === 0 && (
           <div className="empty-state">
-            <p>{rows.length === 0 ? 'No equipment tested yet.' : 'No matches for your filters.'}</p>
+            <p>{rows.length === 0 ? 'No equipment tested yet. Sign-outs with an equipment # / system being tested (or Used On) will appear here.' : 'No matches for your filters.'}</p>
           </div>
         )}
       </div>
