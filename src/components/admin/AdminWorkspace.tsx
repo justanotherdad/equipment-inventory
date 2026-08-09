@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompanyScope } from '../../contexts/CompanyScopeContext';
 import { api } from '../../api';
 import { Link } from 'react-router-dom';
 import { Users, Building2, FolderTree, CreditCard, Pencil, Trash2, UserPlus } from 'lucide-react';
@@ -77,6 +78,7 @@ function getPlanName(level: number | undefined | null): string {
 
 export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
   const { profile } = useAuth();
+  const { companyId: scopeCompanyId, setCompanyId: setScopeCompanyId } = useCompanyScope();
   const isPlatform = mode === 'platform';
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -96,7 +98,10 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
   const [newUserAccess, setNewUserAccess] = useState<{ site_id: number; department_id: number | null; equipment_id?: number | null }[]>([]);
   const [creatingUser, setCreatingUser] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  /** Platform: mirrors sidebar Viewing company. Company Admin: locked to their company. */
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(() =>
+    mode === 'platform' ? scopeCompanyId : null
+  );
   const [companyForm, setCompanyForm] = useState<Partial<Company>>({});
   const [editUserModal, setEditUserModal] = useState<Profile | null>(null);
   const [editSiteModal, setEditSiteModal] = useState<Site | null>(null);
@@ -158,9 +163,9 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
         if (isPlatform && results[4]) {
           const companiesList = results[4] as Company[];
           setCompanies(companiesList);
-          if (!selectedCompanyId && companiesList.length) {
-            const linked = profile?.company_id && companiesList.some((c) => c.id === profile.company_id);
-            setSelectedCompanyId(linked ? profile!.company_id! : null);
+          // Prefer sidebar Viewing company; do not auto-pick an unrelated company
+          if (scopeCompanyId != null && companiesList.some((c) => c.id === scopeCompanyId)) {
+            setSelectedCompanyId(scopeCompanyId);
           }
         }
         if (!isPlatform && profile?.role === 'company_admin' && profile?.company_id) {
@@ -187,6 +192,12 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
   useEffect(() => {
     if (profile) load();
   }, [profile?.role, mode]);
+
+  // Keep Platform "Manage company" in sync with sidebar Viewing company
+  useEffect(() => {
+    if (!isPlatform) return;
+    setSelectedCompanyId(scopeCompanyId);
+  }, [isPlatform, scopeCompanyId]);
 
   useEffect(() => {
     if (selectedCompanyId && isPlatform) {
@@ -587,14 +598,21 @@ export default function AdminWorkspace({ mode }: { mode: AdminWorkspaceMode }) {
             <label>Manage company</label>
             <select
               value={selectedCompanyId ?? ''}
-              onChange={(e) => setSelectedCompanyId(e.target.value ? parseInt(e.target.value, 10) : null)}
+              onChange={(e) => {
+                const id = e.target.value ? parseInt(e.target.value, 10) : null;
+                setSelectedCompanyId(id);
+                setScopeCompanyId(id);
+              }}
               style={{ width: '100%', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'inherit' }}
             >
-              <option value="">Select company...</option>
+              <option value="">All companies (select one to manage users/sites)</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
+              Linked to Viewing company in the sidebar.
+            </p>
           </div>
           <AdminTable<Company>
             columns={[

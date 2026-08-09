@@ -117,6 +117,10 @@ export default function RequestEquipment() {
       setError('Add at least one line with an equipment type and quantity.');
       return;
     }
+    if (!siteId) {
+      setError('Select a site so the request is linked to the correct company.');
+      return;
+    }
     for (const l of lines) {
       if (l.preferred_equipment_id) {
         const eq = equipment.find((x) => x.id === l.preferred_equipment_id);
@@ -301,9 +305,10 @@ export default function RequestEquipment() {
 
           {sites.length > 0 && (
             <div className="form-group">
-              <label>Site</label>
+              <label>Site *</label>
               <select
                 value={siteId}
+                required
                 onChange={(e) => {
                   setSiteId(e.target.value);
                   setDepartmentId('');

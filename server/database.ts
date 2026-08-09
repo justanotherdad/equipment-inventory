@@ -110,6 +110,8 @@ export interface EquipmentRequest {
   date_to: string;
   site_id?: number | null;
   department_id?: number | null;
+  company_id?: number | null;
+  company_name?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'fulfilled';
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -1232,6 +1234,10 @@ export class Database {
       } else if (allowed !== null) {
         rows = [];
       }
+      if (profile.role === 'super_admin' && companyId != null && !Number.isNaN(Number(companyId))) {
+        const cid = Number(companyId);
+        rows = rows.filter((r: { company_id?: number | null }) => r.company_id === cid);
+      }
     }
     return rows.map((r: Record<string, unknown>) => {
       const { _department_id, ...rest } = r;
@@ -1489,6 +1495,10 @@ export class Database {
       } else if (allowed !== null) {
         rows = [];
       }
+      if (profile.role === 'super_admin' && companyId != null && !Number.isNaN(Number(companyId))) {
+        const cid = Number(companyId);
+        rows = rows.filter((r: { company_id?: number | null }) => r.company_id === cid);
+      }
     }
     return rows.map((r: Record<string, unknown>) => {
       const { _department_id, ...rest } = r;
@@ -1528,17 +1538,31 @@ export class Database {
   }
 
   // Equipment Requests
-  private mapEquipmentRequestRow(r: Record<string, unknown>): EquipmentRequest & { _department_id?: number | null } {
+  private mapEquipmentRequestRow(r: Record<string, unknown>): EquipmentRequest & {
+    _department_id?: number | null;
+    company_id?: number | null;
+    company_name?: string | null;
+  } {
     const eq = (r.equipment || {}) as {
       make?: string;
       model?: string;
       serial_number?: string;
       equipment_number?: string;
       department_id?: number | null;
+      departments?: { sites?: { company_id?: number | null; companies?: { name: string } | null } | null } | null;
     };
+    const site = (r.sites || null) as {
+      name?: string;
+      company_id?: number | null;
+      companies?: { name: string } | null;
+    } | null;
+    const dept = (r.departments || null) as {
+      name?: string;
+      sites?: { company_id?: number | null; companies?: { name: string } | null } | null;
+    } | null;
     const rawLines = (r.equipment_request_lines ?? []) as Record<string, unknown>[];
     const lines: EquipmentRequestLine[] = rawLines.map((ln, idx) => {
-      const et = (ln.equipment_types || {}) as { name?: string };
+      const et = (ln.equipment_types || {}) as { name?: string; company_id?: number | null; companies?: { name: string } | null };
       return {
         id: ln.id as number,
         equipment_request_id: ln.equipment_request_id as number,
@@ -1551,11 +1575,39 @@ export class Database {
         preferred_serial: null as string | null,
         preferred_equipment_number: null as string | null,
         sort_order: (ln.sort_order as number) ?? idx,
-      };
+        _type_company_id: et.company_id ?? null,
+        _type_company_name: et.companies?.name ?? null,
+      } as EquipmentRequestLine & { _type_company_id?: number | null; _type_company_name?: string | null };
     });
     lines.sort((a, b) => a.sort_order - b.sort_order);
     const headerDept = (r.department_id as number | null | undefined) ?? null;
     const legacyDept = eq.department_id ?? null;
+
+    let company_id =
+      eq?.departments?.sites?.company_id ??
+      dept?.sites?.company_id ??
+      site?.company_id ??
+      null;
+    let company_name =
+      eq?.departments?.sites?.companies?.name ??
+      dept?.sites?.companies?.name ??
+      site?.companies?.name ??
+      null;
+    if (company_id == null) {
+      for (const ln of lines) {
+        const extra = ln as EquipmentRequestLine & { _type_company_id?: number | null; _type_company_name?: string | null };
+        if (extra._type_company_id != null) {
+          company_id = extra._type_company_id;
+          company_name = extra._type_company_name ?? null;
+          break;
+        }
+      }
+    }
+    for (const ln of lines) {
+      delete (ln as { _type_company_id?: unknown })._type_company_id;
+      delete (ln as { _type_company_name?: unknown })._type_company_name;
+    }
+
     return {
       ...r,
       equipment_make: eq.make,
@@ -1565,9 +1617,13 @@ export class Database {
       equipment_type_name: undefined,
       equipment: undefined,
       equipment_request_lines: undefined,
+      sites: undefined,
+      departments: undefined,
       lines: lines.length ? lines : undefined,
+      company_id,
+      company_name,
       _department_id: headerDept ?? legacyDept,
-    } as EquipmentRequest & { _department_id?: number | null };
+    } as EquipmentRequest & { _department_id?: number | null; company_id?: number | null; company_name?: string | null };
   }
 
   async getEquipmentRequests(
@@ -1580,6 +1636,8 @@ export class Database {
       .select(
         `
         *,
+        sites(name, company_id, companies(name)),
+        departments(name, sites(company_id, companies(name))),
         equipment(make, model, serial_number, equipment_number, department_id, departments(sites(name, company_id, companies(name)))),
         equipment_request_lines(
           id,
@@ -1588,7 +1646,7 @@ export class Database {
           quantity,
           preferred_equipment_id,
           sort_order,
-          equipment_types(name)
+          equipment_types(name, company_id, companies(name))
         )
       `
       )
@@ -1596,29 +1654,59 @@ export class Database {
     if (status) q = q.eq('status', status);
     const { data, error } = await q;
     if (error) throw error;
-    let rows = (data ?? []).map((r: Record<string, unknown>) => {
-      const mapped = this.mapEquipmentRequestRow(r) as EquipmentRequest & {
-        _department_id?: number | null;
-        company_name?: string | null;
-        company_id?: number | null;
-      };
-      const eq = r.equipment as {
-        department_id?: number | null;
-        departments?: { sites?: { name?: string; company_id?: number | null; companies?: { name: string } | null } | null } | null;
-      } | null;
-      mapped.company_name = eq?.departments?.sites?.companies?.name ?? null;
-      mapped.company_id = eq?.departments?.sites?.company_id ?? null;
-      return mapped;
-    });
+    let rows = (data ?? []).map((r: Record<string, unknown>) => this.mapEquipmentRequestRow(r));
+
+    // Backfill company from requester profile when site/dept/type didn't resolve
+    const missingCompanyEmails = [
+      ...new Set(
+        rows
+          .filter((r) => r.company_id == null && r.requester_email)
+          .map((r) => (r.requester_email ?? '').toLowerCase())
+      ),
+    ];
+    if (missingCompanyEmails.length > 0) {
+      const { data: profiles } = await this.supabase
+        .from('profiles')
+        .select('email, company_id, companies(name)')
+        .in('email', missingCompanyEmails);
+      const byEmail = new Map(
+        (profiles ?? []).map((p: { email: string; company_id?: number | null; companies?: { name: string } | null }) => [
+          p.email.toLowerCase(),
+          { company_id: p.company_id ?? null, company_name: p.companies?.name ?? null },
+        ])
+      );
+      for (const r of rows) {
+        if (r.company_id != null) continue;
+        const hit = byEmail.get((r.requester_email ?? '').toLowerCase());
+        if (hit?.company_id != null) {
+          r.company_id = hit.company_id;
+          r.company_name = hit.company_name;
+        }
+      }
+    }
+
     if (profile) {
       if (profile.role === 'user') {
-        rows = rows.filter((r: { requester_email?: string }) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
+        rows = rows.filter((r) => (r.requester_email ?? '').toLowerCase() === profile.email.toLowerCase());
+      } else if (profile.role === 'super_admin') {
+        if (companyId != null && !Number.isNaN(Number(companyId))) {
+          const cid = Number(companyId);
+          rows = rows.filter((r) => r.company_id === cid);
+        }
+      } else if (profile.role === 'company_admin' && profile.company_id) {
+        rows = rows.filter((r) => r.company_id === profile.company_id);
       } else {
         const allowed = await this.resolveListDepartmentFilter(profile, companyId);
-        if (allowed !== null && allowed.length > 0) {
-          rows = rows.filter((r: { _department_id?: number | null }) => r._department_id != null && allowed!.includes(r._department_id));
-        } else if (allowed !== null) {
-          rows = [];
+        if (allowed !== null) {
+          if (allowed.length === 0) {
+            rows = [];
+          } else {
+            const allowedCompanies = await this.getEquipmentTypeCompanyIds(profile);
+            rows = rows.filter((r) => {
+              if (r.company_id != null && allowedCompanies !== null && allowedCompanies.includes(r.company_id)) return true;
+              return r._department_id != null && allowed.includes(r._department_id);
+            });
+          }
         }
       }
     }
@@ -1634,7 +1722,7 @@ export class Database {
     if (prefIds.size > 0) {
       const { data: prefEq } = await this.supabase
         .from('equipment')
-        .select('id, make, model, serial_number, equipment_number')
+        .select('id, make, model, serial_number, equipment_number, department_id, departments(sites(company_id, companies(name)))')
         .in('id', [...prefIds]);
       const emap = new Map((prefEq ?? []).map((e: { id: number }) => [e.id, e]));
       for (const r of rows) {
@@ -1643,15 +1731,32 @@ export class Database {
         for (const ln of lines) {
           if (!ln.preferred_equipment_id) continue;
           const e = emap.get(ln.preferred_equipment_id) as
-            | { make: string; model: string; serial_number: string; equipment_number: string | null }
+            | {
+                make: string;
+                model: string;
+                serial_number: string;
+                equipment_number: string | null;
+                departments?: { sites?: { company_id?: number | null; companies?: { name: string } | null } | null } | null;
+              }
             | undefined;
           if (e) {
             ln.preferred_make = e.make;
             ln.preferred_model = e.model;
             ln.preferred_serial = e.serial_number;
             ln.preferred_equipment_number = e.equipment_number;
+            if (r.company_id == null && e.departments?.sites?.company_id != null) {
+              r.company_id = e.departments.sites.company_id;
+              r.company_name = e.departments.sites.companies?.name ?? null;
+            }
           }
         }
+      }
+      // Re-apply company filter after enriching from preferred equipment
+      if (profile?.role === 'super_admin' && companyId != null && !Number.isNaN(Number(companyId))) {
+        const cid = Number(companyId);
+        rows = rows.filter((r) => r.company_id === cid);
+      } else if (profile?.role === 'company_admin' && profile.company_id) {
+        rows = rows.filter((r) => r.company_id === profile.company_id);
       }
     }
     for (const r of rows) {
@@ -1661,7 +1766,7 @@ export class Database {
         ln.fulfilled_quantity = await this.countSignOutsForLine(ln.id);
       }
     }
-    return rows.map((r: Record<string, unknown>) => {
+    return rows.map((r) => {
       const { _department_id, ...rest } = r;
       return rest;
     }) as EquipmentRequest[];
