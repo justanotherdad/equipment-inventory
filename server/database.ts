@@ -15,6 +15,8 @@ export interface EquipmentType {
   name: string;
   requires_calibration: boolean | number;
   calibration_frequency_months: number | null;
+  company_id?: number | null;
+  company_name?: string | null;
   created_at: string;
 }
 
@@ -149,10 +151,52 @@ export class Database {
   }
 
   private toEquipmentType(row: Record<string, unknown>): EquipmentType {
+    const companies = row.companies as { name?: string } | null | undefined;
+    const { companies: _c, ...rest } = row;
     return {
-      ...row,
+      ...rest,
       requires_calibration: row.requires_calibration === true ? 1 : 0,
+      company_name: companies?.name ?? (row.company_name as string | null | undefined) ?? null,
     } as EquipmentType;
+  }
+
+  /** Company IDs whose equipment types a non–super-admin profile may see. */
+  private async getEquipmentTypeCompanyIds(profile: Profile): Promise<number[] | null> {
+    if (profile.role === 'super_admin') return null;
+    if (profile.role === 'company_admin') {
+      return profile.company_id ? [profile.company_id] : [];
+    }
+    if (profile.company_id) return [profile.company_id];
+    const deptIds = await this.getAllowedDepartmentIds(profile);
+    if (deptIds === null) return null;
+    if (deptIds.length === 0) return [];
+    const { data } = await this.supabase
+      .from('departments')
+      .select('sites(company_id)')
+      .in('id', deptIds);
+    const ids = new Set<number>();
+    for (const r of data ?? []) {
+      const site = (r as { sites?: { company_id?: number | null } | null }).sites;
+      if (site?.company_id != null) ids.add(site.company_id);
+    }
+    return [...ids];
+  }
+
+  async assertEquipmentTypeAccess(typeId: number, profile?: Profile, companyId?: number | null): Promise<void> {
+    const { data, error } = await this.supabase
+      .from('equipment_types')
+      .select('id, company_id')
+      .eq('id', typeId)
+      .single();
+    if (error || !data) throw new Error('Equipment type not found');
+    const typeCompanyId = (data as { company_id: number }).company_id;
+    if (!profile) return;
+    if (profile.role === 'super_admin') {
+      if (companyId != null && typeCompanyId !== companyId) throw new Error('Equipment type not found');
+      return;
+    }
+    const allowed = await this.getEquipmentTypeCompanyIds(profile);
+    if (allowed !== null && !allowed.includes(typeCompanyId)) throw new Error('Access denied');
   }
 
   async getProfileByAuthUserId(authUserId: string): Promise<Profile | undefined> {
@@ -445,7 +489,31 @@ export class Database {
     }
     const { data: row, error } = await this.supabase.from('companies').insert(payload).select('id').single();
     if (error) throw error;
-    return (row as { id: number })?.id ?? null;
+    const companyId = (row as { id: number })?.id ?? null;
+    if (companyId != null) {
+      await this.seedDefaultEquipmentTypes(companyId);
+    }
+    return companyId;
+  }
+
+  /** Default catalog for a new company (names unique per company). */
+  async seedDefaultEquipmentTypes(companyId: number) {
+    const defaults = [
+      { name: 'Temperature Logger', requires_calibration: true, calibration_frequency_months: 12 },
+      { name: 'Temp & Humidity Logger', requires_calibration: true, calibration_frequency_months: 12 },
+      { name: 'Laptop', requires_calibration: false, calibration_frequency_months: null as number | null },
+      { name: 'Temperature Dry Block', requires_calibration: true, calibration_frequency_months: 12 },
+      { name: 'Temperature Standard', requires_calibration: true, calibration_frequency_months: 12 },
+    ];
+    for (const d of defaults) {
+      const { error } = await this.supabase.from('equipment_types').insert({
+        name: d.name,
+        requires_calibration: d.requires_calibration,
+        calibration_frequency_months: d.calibration_frequency_months,
+        company_id: companyId,
+      });
+      if (error && !String(error.message).toLowerCase().includes('duplicate')) throw error;
+    }
   }
 
   async deleteCompany(companyId: number): Promise<{ storagePaths: string[]; authUserIds: string[] }> {
@@ -481,6 +549,7 @@ export class Database {
       await this.supabase.from('calibration_records').delete().eq('equipment_id', eqId);
     }
     await this.supabase.from('equipment').delete().in('id', equipmentIds.length ? equipmentIds : [-1]);
+    await this.supabase.from('equipment_types').delete().eq('company_id', companyId);
 
     const { data: companyProfiles } = await this.supabase.from('profiles').select('id, auth_user_id').eq('company_id', companyId);
     const authUserIds: string[] = (companyProfiles ?? []).map((p) => (p as { auth_user_id: string }).auth_user_id).filter(Boolean);
@@ -694,25 +763,48 @@ export class Database {
     }));
   }
 
-  async getEquipmentTypes(): Promise<EquipmentType[]> {
-    const { data, error } = await this.supabase
+  async getEquipmentTypes(profile?: Profile, companyId?: number | null): Promise<EquipmentType[]> {
+    let q = this.supabase
       .from('equipment_types')
-      .select('*')
+      .select('*, companies(name)')
       .order('name');
+
+    if (profile?.role === 'super_admin') {
+      if (companyId != null && !Number.isNaN(Number(companyId))) {
+        q = q.eq('company_id', Number(companyId));
+      }
+    } else if (profile) {
+      const allowed = await this.getEquipmentTypeCompanyIds(profile);
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        q = q.in('company_id', allowed);
+      }
+    }
+
+    const { data, error } = await q;
     if (error) throw error;
-    return (data ?? []).map(this.toEquipmentType);
+    return (data ?? []).map((r) => this.toEquipmentType(r as Record<string, unknown>));
   }
 
-  async createEquipmentType(data: { name: string; requires_calibration: boolean; calibration_frequency_months?: number }) {
+  async createEquipmentType(
+    data: { name: string; requires_calibration: boolean; calibration_frequency_months?: number | null; company_id: number }
+  ) {
     const { error } = await this.supabase.from('equipment_types').insert({
       name: data.name,
       requires_calibration: data.requires_calibration,
       calibration_frequency_months: data.calibration_frequency_months ?? null,
+      company_id: data.company_id,
     });
     if (error) throw error;
   }
 
-  async updateEquipmentType(id: number, data: Partial<{ name: string; requires_calibration: boolean; calibration_frequency_months: number | null }>) {
+  async updateEquipmentType(
+    id: number,
+    data: Partial<{ name: string; requires_calibration: boolean; calibration_frequency_months: number | null }>,
+    profile?: Profile,
+    companyId?: number | null
+  ) {
+    await this.assertEquipmentTypeAccess(id, profile, companyId);
     const { data: existing, error: fetchErr } = await this.supabase
       .from('equipment_types')
       .select('*')
@@ -730,7 +822,8 @@ export class Database {
     if (error) throw error;
   }
 
-  async deleteEquipmentType(id: number) {
+  async deleteEquipmentType(id: number, profile?: Profile, companyId?: number | null) {
+    await this.assertEquipmentTypeAccess(id, profile, companyId);
     const { count, error: countErr } = await this.supabase
       .from('equipment')
       .select('*', { count: 'exact', head: true })
@@ -895,6 +988,21 @@ export class Database {
     } as SignOut;
   }
 
+  /** Ensure equipment type belongs to the same company as the department's site. */
+  private async assertEquipmentTypeMatchesDepartment(equipmentTypeId: number, departmentId: number | null | undefined) {
+    if (departmentId == null) return;
+    const [{ data: type }, { data: dept }] = await Promise.all([
+      this.supabase.from('equipment_types').select('company_id').eq('id', equipmentTypeId).single(),
+      this.supabase.from('departments').select('sites(company_id)').eq('id', departmentId).single(),
+    ]);
+    const typeCompany = (type as { company_id?: number } | null)?.company_id;
+    const deptCompany = (dept as { sites?: { company_id?: number | null } | null } | null)?.sites?.company_id;
+    if (typeCompany == null || deptCompany == null) return;
+    if (typeCompany !== deptCompany) {
+      throw new Error('Equipment type must belong to the same company as the department');
+    }
+  }
+
   async createEquipment(data: {
     equipment_type_id: number;
     department_id?: number | null;
@@ -907,6 +1015,7 @@ export class Database {
     notes?: string | null;
     image_path?: string | null;
   }): Promise<number> {
+    await this.assertEquipmentTypeMatchesDepartment(data.equipment_type_id, data.department_id);
     const { data: inserted, error } = await this.supabase
       .from('equipment')
       .insert({
@@ -964,6 +1073,18 @@ export class Database {
     notes: string | null;
   }>, profile?: Profile) {
     if (ids.length === 0) return;
+    if (data.equipment_type_id !== undefined || data.department_id !== undefined) {
+      const { data: rows } = await this.supabase
+        .from('equipment')
+        .select('id, equipment_type_id, department_id')
+        .in('id', ids);
+      for (const row of rows ?? []) {
+        const r = row as { equipment_type_id: number; department_id: number | null };
+        const typeId = data.equipment_type_id ?? r.equipment_type_id;
+        const deptId = data.department_id !== undefined ? data.department_id : r.department_id;
+        await this.assertEquipmentTypeMatchesDepartment(typeId, deptId);
+      }
+    }
     const payload: Record<string, unknown> = {};
     if (data.equipment_type_id !== undefined) payload.equipment_type_id = data.equipment_type_id;
     if (data.department_id !== undefined) payload.department_id = data.department_id;
@@ -997,11 +1118,14 @@ export class Database {
       .eq('id', id)
       .single();
     if (fetchErr || !existing) throw new Error('Equipment not found');
+    const nextTypeId = data.equipment_type_id ?? existing.equipment_type_id;
+    const nextDeptId = data.department_id !== undefined ? data.department_id : existing.department_id;
+    await this.assertEquipmentTypeMatchesDepartment(nextTypeId, nextDeptId);
     const { error } = await this.supabase
       .from('equipment')
       .update({
-        equipment_type_id: data.equipment_type_id ?? existing.equipment_type_id,
-        department_id: data.department_id !== undefined ? data.department_id : existing.department_id,
+        equipment_type_id: nextTypeId,
+        department_id: nextDeptId,
         make: data.make ?? existing.make,
         model: data.model ?? existing.model,
         serial_number: data.serial_number ?? existing.serial_number,

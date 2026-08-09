@@ -21,14 +21,16 @@ const SCOPED_GET_PREFIXES = [
   '/api/departments',
   '/api/calibration-records',
   '/api/equipment-requests',
+  '/api/equipment-types',
 ];
 
 function withCompanyScope(path: string, method?: string): string {
   const m = (method ?? 'GET').toUpperCase();
-  if (m !== 'GET') return path;
-  if (!SCOPED_GET_PREFIXES.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'))) {
-    return path;
-  }
+  const isScopedGet = m === 'GET' && SCOPED_GET_PREFIXES.some((p) => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'));
+  const isEquipmentTypesWrite =
+    (m === 'POST' || m === 'PUT' || m === 'DELETE') &&
+    (path === '/api/equipment-types' || path.startsWith('/api/equipment-types/'));
+  if (!isScopedGet && !isEquipmentTypesWrite) return path;
   // Don't scope admin/platform company management or auth
   if (path.startsWith('/api/admin/') || path.startsWith('/api/auth/')) return path;
   const sep = path.includes('?') ? '&' : '?';
@@ -143,7 +145,7 @@ export const api = {
   },
   equipmentTypes: {
     getAll: () => request('/api/equipment-types'),
-    create: (data: { name: string; requires_calibration: boolean; calibration_frequency_months?: number }) =>
+    create: (data: { name: string; requires_calibration: boolean; calibration_frequency_months?: number | null; company_id?: number }) =>
       request('/api/equipment-types', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{ name: string; requires_calibration: boolean; calibration_frequency_months: number | null }>) =>
       request(`/api/equipment-types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

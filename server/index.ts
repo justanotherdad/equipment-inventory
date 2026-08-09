@@ -103,9 +103,9 @@ function parseCompanyScope(req: express.Request): number | null | undefined {
 }
 
 // API routes
-app.get('/api/equipment-types', async (_req, res) => {
+app.get('/api/equipment-types', async (req, res) => {
   try {
-    const data = await db.getEquipmentTypes();
+    const data = await db.getEquipmentTypes(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -114,7 +114,28 @@ app.get('/api/equipment-types', async (_req, res) => {
 
 app.post('/api/equipment-types', async (req, res) => {
   try {
-    await db.createEquipmentType(req.body);
+    const profile = req.profile;
+    if (!profile) return res.status(401).json({ error: 'Unauthorized' });
+    let companyId: number | null | undefined = parseCompanyScope(req);
+    if (profile.role === 'super_admin') {
+      if (companyId == null && req.body?.company_id != null) {
+        companyId = parseInt(String(req.body.company_id), 10);
+      }
+      if (companyId == null || Number.isNaN(companyId)) {
+        return res.status(400).json({ error: 'Select a company before adding an equipment type' });
+      }
+    } else if (profile.role === 'company_admin' || profile.role === 'equipment_manager' || profile.role === 'user') {
+      companyId = profile.company_id ?? (await db.getDefaultCompanyId());
+      if (companyId == null) return res.status(400).json({ error: 'No company assigned' });
+    } else {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    await db.createEquipmentType({
+      name: req.body.name,
+      requires_calibration: !!req.body.requires_calibration,
+      calibration_frequency_months: req.body.calibration_frequency_months,
+      company_id: companyId,
+    });
     res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -123,7 +144,7 @@ app.post('/api/equipment-types', async (req, res) => {
 
 app.put('/api/equipment-types/:id', async (req, res) => {
   try {
-    await db.updateEquipmentType(parseInt(req.params.id, 10), req.body);
+    await db.updateEquipmentType(parseInt(req.params.id, 10), req.body, req.profile, parseCompanyScope(req));
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
@@ -132,7 +153,7 @@ app.put('/api/equipment-types/:id', async (req, res) => {
 
 app.delete('/api/equipment-types/:id', async (req, res) => {
   try {
-    await db.deleteEquipmentType(parseInt(req.params.id, 10));
+    await db.deleteEquipmentType(parseInt(req.params.id, 10), req.profile, parseCompanyScope(req));
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });

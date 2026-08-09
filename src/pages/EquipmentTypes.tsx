@@ -2,15 +2,18 @@ import { useEffect, useState, useMemo } from 'react';
 import { Plus, Edit, Trash2, ArrowUpDown } from 'lucide-react';
 import EquipmentTypeModal from '../components/EquipmentTypeModal';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+import { useCompanyScope } from '../contexts/CompanyScopeContext';
 
 interface EquipmentType {
   id: number;
   name: string;
   requires_calibration: number;
   calibration_frequency_months: number | null;
+  company_name?: string | null;
 }
 
-type SortKey = 'name' | 'requires_calibration' | 'calibration_frequency_months';
+type SortKey = 'name' | 'requires_calibration' | 'calibration_frequency_months' | 'company_name';
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'requires_calibration', label: 'Calibration' },
@@ -18,6 +21,10 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ];
 
 export default function EquipmentTypes() {
+  const { profile } = useAuth();
+  const { companyId } = useCompanyScope();
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const showCompanyCol = isSuperAdmin && companyId == null;
   const [types, setTypes] = useState<EquipmentType[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -26,7 +33,7 @@ export default function EquipmentTypes() {
 
   const load = async () => {
     const data = await api.equipmentTypes.getAll();
-    setTypes(data);
+    setTypes(data as EquipmentType[]);
   };
 
   useEffect(() => {
@@ -38,6 +45,7 @@ export default function EquipmentTypes() {
     arr.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') cmp = (a.name || '').localeCompare(b.name || '');
+      else if (sortKey === 'company_name') cmp = (a.company_name || '').localeCompare(b.company_name || '');
       else if (sortKey === 'requires_calibration') cmp = (a.requires_calibration ? 1 : 0) - (b.requires_calibration ? 1 : 0);
       else if (sortKey === 'calibration_frequency_months') {
         const va = a.calibration_frequency_months ?? -1;
@@ -55,8 +63,11 @@ export default function EquipmentTypes() {
   };
 
   const cycleSortField = () => {
-    const idx = SORT_OPTIONS.findIndex((o) => o.key === sortKey);
-    setSortKey(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].key);
+    const opts = showCompanyCol
+      ? [...SORT_OPTIONS, { key: 'company_name' as SortKey, label: 'Company' }]
+      : SORT_OPTIONS;
+    const idx = opts.findIndex((o) => o.key === sortKey);
+    setSortKey(opts[(idx + 1) % opts.length].key);
     setSortAsc(true);
   };
 
@@ -75,7 +86,7 @@ export default function EquipmentTypes() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2>Equipment Types</h2>
-          <p>Configure equipment categories and calibration requirements</p>
+          <p>Configure categories for this company (not shared across companies)</p>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true); }}>
           <Plus size={18} />
@@ -85,12 +96,15 @@ export default function EquipmentTypes() {
 
       <div className="card">
         <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Equipment types define categories (e.g. Temperature Logger, Laptop). For each type, you can specify whether
-          calibration is required and the recalibration frequency in months.
+          Equipment types define categories (e.g. Temperature Logger, Laptop) for one company only.
+          For each type, you can specify whether calibration is required and the recalibration frequency in months.
         </p>
         <div className="sort-by-mobile">
           <button type="button" className="btn btn-secondary" onClick={cycleSortField}>
-            <ArrowUpDown size={16} /> Sort by {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
+            <ArrowUpDown size={16} /> Sort by {(showCompanyCol
+              ? [...SORT_OPTIONS, { key: 'company_name' as SortKey, label: 'Company' }]
+              : SORT_OPTIONS
+            ).find((o) => o.key === sortKey)?.label}
           </button>
         </div>
         <div className="table-container">
@@ -98,6 +112,9 @@ export default function EquipmentTypes() {
             <thead>
               <tr>
                 <th className="sortable" onClick={() => handleSort('name')}>Name {sortKey === 'name' && (sortAsc ? '↑' : '↓')}</th>
+                {showCompanyCol && (
+                  <th className="sortable" onClick={() => handleSort('company_name')}>Company {sortKey === 'company_name' && (sortAsc ? '↑' : '↓')}</th>
+                )}
                 <th className="sortable" onClick={() => handleSort('requires_calibration')}>Requires Calibration {sortKey === 'requires_calibration' && (sortAsc ? '↑' : '↓')}</th>
                 <th className="sortable" onClick={() => handleSort('calibration_frequency_months')}>Frequency {sortKey === 'calibration_frequency_months' && (sortAsc ? '↑' : '↓')}</th>
                 <th></th>
@@ -116,6 +133,7 @@ export default function EquipmentTypes() {
                       {t.name}
                     </button>
                   </td>
+                  {showCompanyCol && <td>{t.company_name ?? '—'}</td>}
                   <td>{t.requires_calibration ? 'Yes' : 'No'}</td>
                   <td>{t.calibration_frequency_months ? `Every ${t.calibration_frequency_months} months` : '—'}</td>
                   <td>
@@ -148,6 +166,12 @@ export default function EquipmentTypes() {
                   </button>
                 </span>
               </div>
+              {showCompanyCol && (
+                <div className="mobile-card-row">
+                  <span className="mobile-card-label">Company</span>
+                  <span className="mobile-card-value">{t.company_name ?? '—'}</span>
+                </div>
+              )}
               <div className="mobile-card-row">
                 <span className="mobile-card-label">Calibration</span>
                 <span className="mobile-card-value">{t.requires_calibration ? 'Yes' : 'No'}</span>
@@ -170,7 +194,7 @@ export default function EquipmentTypes() {
 
         {types.length === 0 && (
           <div className="empty-state">
-            <p>No equipment types. Add one to get started.</p>
+            <p>No equipment types for this company. Add one to get started.</p>
           </div>
         )}
       </div>

@@ -71,17 +71,17 @@ See `DEPLOY-RENDER.md` for Supabase setup and deployment to Render's free tier.
 
 ## Default Equipment Types
 
-On first run, the app seeds these equipment types:
+New companies are seeded with these types (each company has its own copy):
 
 | Type                  | Calibration Required | Frequency |
 |-----------------------|---------------------|-----------|
 | Temperature Logger    | Yes                 | 12 months |
 | Temp & Humidity Logger| Yes                 | 12 months |
 | Laptop                | No                  | —         |
-| Temperature Block     | Yes                 | 12 months |
+| Temperature Dry Block | Yes                 | 12 months |
 | Temperature Standard | Yes                 | 12 months |
 
-You can add, edit, or remove equipment types in **Equipment Types** (Settings).
+You can add, edit, or remove equipment types in **Equipment Types**. Types are exclusive to one company.
 
 ## Tech Stack
 
