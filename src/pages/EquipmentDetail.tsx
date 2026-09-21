@@ -266,7 +266,11 @@ export default function EquipmentDetail() {
   };
 
   const handleDeleteEquipment = async () => {
-    if (!confirm('Delete this equipment? This cannot be undone.')) return;
+    if (signOuts.some((s) => !s.signed_in_at)) {
+      alert('Check this item in before deleting it.');
+      return;
+    }
+    if (!confirm('This permanently deletes the item and its sign-out and calibration history. This cannot be undone.')) return;
     try {
       await api.equipment.delete(equipmentId);
       window.location.href = '/equipment';
