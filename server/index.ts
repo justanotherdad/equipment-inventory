@@ -10,6 +10,15 @@ import { SquareClient, SquareEnvironment } from 'square';
 import { Database } from './database';
 import { authMiddleware } from './auth';
 
+function errorMessage(err: unknown, fallback = 'Unknown error'): string {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    const message = (err as { message: string }).message.trim();
+    if (message) return message;
+  }
+  return fallback;
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '', 10) || 3000;
 
@@ -86,7 +95,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     res.json(req.profile);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -108,7 +117,7 @@ app.get('/api/equipment-types', async (req, res) => {
     const data = await db.getEquipmentTypes(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -138,7 +147,7 @@ app.post('/api/equipment-types', async (req, res) => {
     });
     res.status(201).json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -147,7 +156,7 @@ app.put('/api/equipment-types/:id', async (req, res) => {
     await db.updateEquipmentType(parseInt(req.params.id, 10), req.body, req.profile, parseCompanyScope(req));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -156,7 +165,7 @@ app.delete('/api/equipment-types/:id', async (req, res) => {
     await db.deleteEquipmentType(parseInt(req.params.id, 10), req.profile, parseCompanyScope(req));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -165,7 +174,7 @@ app.get('/api/equipment', async (req, res) => {
     const data = await db.getAllEquipment(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -174,7 +183,7 @@ app.get('/api/equipment/calibration-status', async (req, res) => {
     const data = await db.getCalibrationStatus(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -183,7 +192,7 @@ app.get('/api/equipment/barcode/:barcode', async (req, res) => {
     const eq = await db.getEquipmentByBarcode(req.params.barcode, req.profile);
     res.json(eq ?? null);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -192,7 +201,7 @@ app.get('/api/equipment/:id', async (req, res) => {
     const eq = await db.getEquipmentById(parseInt(req.params.id, 10), req.profile);
     res.json(eq ?? null);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -210,7 +219,7 @@ app.post('/api/equipment', async (req, res) => {
     const id = await db.createEquipment(req.body);
     res.status(201).json({ id });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -224,7 +233,7 @@ app.put('/api/equipment/:id', async (req, res) => {
     await db.updateEquipment(id, req.body);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -242,7 +251,7 @@ app.put('/api/equipment/bulk', async (req, res) => {
     await db.bulkUpdateEquipment(idList, data);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -260,7 +269,7 @@ app.delete('/api/equipment/:id', async (req, res) => {
     await db.deleteEquipment(id);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -290,7 +299,7 @@ app.post('/api/equipment/:id/image', uploadImage.single('image'), async (req, re
     await db.updateEquipment(equipmentId, { image_path: imagePath });
     res.status(201).json({ ok: true, image_path: imagePath });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -305,7 +314,7 @@ app.delete('/api/equipment/:id/image', async (req, res) => {
     await db.updateEquipment(equipmentId, { image_path: null });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -320,7 +329,7 @@ app.get('/api/equipment/:id/image-url', async (req, res) => {
     if (error || !data?.signedUrl) return res.json({ url: null });
     res.json({ url: data.signedUrl });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -329,7 +338,7 @@ app.get('/api/sign-outs', async (req, res) => {
     const data = await db.getAllSignOuts(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -338,7 +347,7 @@ app.get('/api/sign-outs/active', async (req, res) => {
     const data = await db.getActiveSignOuts(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -347,7 +356,7 @@ app.get('/api/sign-outs/equipment/:equipmentId', async (req, res) => {
     const data = await db.getSignOutsByEquipment(parseInt(req.params.equipmentId, 10));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -356,7 +365,7 @@ app.get('/api/sign-outs/active/equipment/:equipmentId', async (req, res) => {
     const so = await db.getActiveSignOutByEquipmentId(parseInt(req.params.equipmentId, 10));
     res.json(so ?? null);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -369,7 +378,7 @@ app.get('/api/sign-outs/date-range', async (req, res) => {
     const data = await db.getSignOutsInDateRange(req.profile, start, end);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -378,7 +387,7 @@ app.get('/api/equipment-tested', async (req, res) => {
     const data = await db.getEquipmentTested(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -388,7 +397,7 @@ app.get('/api/equipment-tested/:equipmentNumber', async (req, res) => {
     const data = await db.getEquipmentTestedDetail(req.profile, equipmentNumber, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -397,7 +406,7 @@ app.post('/api/sign-outs', async (req, res) => {
     const id = await db.createSignOut(req.body);
     res.status(201).json({ id });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -406,7 +415,7 @@ app.get('/api/sites', async (req, res) => {
     const data = await db.getSitesForProfile(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -416,7 +425,7 @@ app.post('/api/checkouts', async (req, res) => {
     const result = await db.createCheckout(req.profile, req.body);
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -435,7 +444,7 @@ app.put('/api/sign-outs/:id', async (req, res) => {
     await db.updateSignOut(parseInt(req.params.id, 10), { signed_out_at, date_from, date_to }, req.profile);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -455,7 +464,7 @@ app.post('/api/sign-outs/:id/check-in', async (req, res) => {
     });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -466,7 +475,7 @@ app.get('/api/notifications', async (req, res) => {
     const data = await db.getNotifications(req.profile.id, unreadOnly, req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -476,7 +485,7 @@ app.get('/api/notifications/unread-count', async (req, res) => {
     const count = await db.getUnreadNotificationCount(req.profile.id, req.profile, parseCompanyScope(req));
     res.json({ count });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -488,7 +497,7 @@ app.post('/api/notifications/mark-read', async (req, res) => {
     else if (Array.isArray(ids)) await db.markNotificationsRead(req.profile.id, ids);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -497,7 +506,7 @@ app.get('/api/usage/sign-out/:signOutId', async (req, res) => {
     const data = await db.getUsageBySignOut(parseInt(req.params.signOutId, 10));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -506,7 +515,7 @@ app.post('/api/usage', async (req, res) => {
     await db.addUsage(req.body);
     res.status(201).json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -515,7 +524,7 @@ app.delete('/api/usage/:id', async (req, res) => {
     await db.removeUsage(parseInt(req.params.id, 10));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -529,7 +538,7 @@ app.get('/api/calibration-records/equipment/:equipmentId', async (req, res) => {
     const records = await db.getCalibrationRecords(equipmentId);
     res.json(records.map((r) => ({ ...r, download_url: `/api/calibration-records/${r.id}/download` })));
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -557,7 +566,7 @@ app.post('/api/calibration-records/equipment/:equipmentId', upload.single('pdf')
     await db.addCalibrationRecord(equipmentId, req.file.originalname, storagePath, calDate || undefined, dueDate || undefined);
     res.status(201).json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -574,7 +583,7 @@ app.put('/api/calibration-records/:id', async (req, res) => {
     await db.updateCalibrationRecord(id, { cal_date: cal_date || null, due_date: due_date || null });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -593,7 +602,7 @@ app.get('/api/calibration-records/:id/download', async (req, res) => {
 
     res.redirect(302, data.signedUrl);
   } catch (err) {
-    res.status(500).send(err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).send(errorMessage(err));
   }
 });
 
@@ -611,7 +620,7 @@ app.delete('/api/calibration-records/:id', async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -620,7 +629,7 @@ app.get('/api/calibration-records', async (req, res) => {
     const records = await db.getAllCalibrationRecords(req.profile, parseCompanyScope(req));
     res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -671,7 +680,7 @@ app.get('/api/equipment-requests', async (req, res) => {
     const data = await db.getEquipmentRequests(status, req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -690,7 +699,7 @@ app.post('/api/equipment-requests', async (req, res) => {
       res.status(201).json({ ok: true });
     }
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -722,7 +731,7 @@ app.post('/api/equipment-requests/:id/approve', async (req, res) => {
     });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -741,7 +750,7 @@ app.post('/api/equipment-requests/:id/fulfill', async (req, res) => {
     await db.fulfillEquipmentRequest(req.profile, parseInt(req.params.id, 10), reviewed_by.trim(), fulfillments);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -757,7 +766,7 @@ app.patch('/api/equipment-requests/:id/lines/:lineId', async (req, res) => {
     await db.updateRequestLineQuantity(parseInt(req.params.id, 10), parseInt(req.params.lineId, 10), Number(quantity));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -768,7 +777,7 @@ app.post('/api/equipment-requests/:id/reject', async (req, res) => {
     await db.rejectEquipmentRequest(parseInt(req.params.id, 10), reviewed_by.trim(), comment);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -805,7 +814,7 @@ app.get('/api/admin/profiles', adminOnly, async (req, res) => {
     const data = await db.getAllProfiles(req.profile);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -816,7 +825,7 @@ app.put('/api/admin/profiles/:id/role', adminOnly, async (req, res) => {
     await db.updateProfileRole(parseInt(req.params.id, 10), role);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -833,7 +842,7 @@ app.put('/api/admin/profiles/:id', adminOnly, async (req, res) => {
     await db.updateProfile(profileId, { display_name, email: email?.trim?.(), company_id });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -842,7 +851,7 @@ app.get('/api/admin/profiles/:id/access', adminOnly, async (req, res) => {
     const data = await db.getProfileAccess(parseInt(req.params.id, 10));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -853,7 +862,7 @@ app.put('/api/admin/profiles/:id/access', adminOnly, async (req, res) => {
     await db.setProfileAccess(parseInt(req.params.id, 10), access);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -870,7 +879,7 @@ app.delete('/api/admin/profiles/:id', adminOnly, async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -879,7 +888,7 @@ app.get('/api/admin/sites', adminOnly, async (req, res) => {
     const data = await db.getSites(req.profile);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -895,7 +904,7 @@ app.post('/api/admin/sites', adminOnly, async (req, res) => {
     await db.createSite(name.trim(), companyId);
     res.status(201).json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -908,7 +917,7 @@ app.put('/api/admin/sites/:id', adminOnly, async (req, res) => {
     await db.updateSite(id, name.trim(), companyId);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -917,7 +926,7 @@ app.delete('/api/admin/sites/:id', adminOnly, async (req, res) => {
     await db.deleteSite(parseInt(req.params.id, 10));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -926,7 +935,7 @@ app.get('/api/departments', async (req, res) => {
     const data = await db.getDepartmentsForProfile(req.profile, parseCompanyScope(req));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -935,7 +944,7 @@ app.get('/api/admin/departments', adminOnly, async (req, res) => {
     const data = await db.getDepartments(req.profile);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -946,7 +955,7 @@ app.post('/api/admin/departments', adminOnly, async (req, res) => {
     await db.createDepartment(parseInt(String(site_id), 10), name.trim());
     res.status(201).json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -958,7 +967,7 @@ app.put('/api/admin/departments/:id', adminOnly, async (req, res) => {
     await db.updateDepartment(id, name.trim(), parseInt(String(site_id), 10));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -967,7 +976,7 @@ app.delete('/api/admin/departments/:id', adminOnly, async (req, res) => {
     await db.deleteDepartment(parseInt(req.params.id, 10));
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -981,7 +990,7 @@ app.get('/api/admin/onboarding-status', companyAdminOnly, async (req, res) => {
     }
     res.json({ needsOnboarding });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -991,7 +1000,7 @@ app.post('/api/admin/onboarding-complete', companyAdminOnly, async (req, res) =>
     await db.setOnboardingComplete(req.profile.id);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1000,7 +1009,7 @@ app.get('/api/admin/companies', superAdminOnly, async (_req, res) => {
     const data = await db.getAllCompanies();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -1012,7 +1021,7 @@ app.get('/api/admin/companies/:id', adminOnly, async (req, res) => {
     if (!company) return res.status(404).json({ error: 'Company not found' });
     res.json(company);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -1036,7 +1045,7 @@ app.put('/api/admin/companies/:id', adminOnly, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1047,7 +1056,7 @@ app.get('/api/payments/orders', companyAdminOnly, async (req, res) => {
     const orders = await db.getSubscriptionOrders(companyId);
     res.json(orders);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(500).json({ error: errorMessage(err) });
   }
 });
 
@@ -1085,7 +1094,7 @@ app.post('/api/payments/process', companyAdminOnly, async (req, res) => {
     }
     res.json({ ok: true, paymentId: result.payment.id });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Payment failed' });
+    res.status(400).json({ error: errorMessage(err, 'Payment failed') });
   }
 });
 
@@ -1137,7 +1146,7 @@ app.post('/api/admin/companies', superAdminOnly, async (req, res) => {
     }
     res.status(201).json({ ok: true, id: companyId });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1149,7 +1158,7 @@ app.put('/api/admin/companies/:id/subscription', superAdminOnly, async (req, res
     await db.updateCompanySubscription(companyId, subscription_active, subscription_level);
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1164,7 +1173,7 @@ app.delete('/api/admin/companies/:id', superAdminOnly, async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1186,7 +1195,7 @@ app.post('/api/admin/companies/:id/close', companyAdminOnly, async (req, res) =>
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 
@@ -1215,7 +1224,7 @@ app.post('/api/admin/users', adminOrEquipmentManager, async (req, res) => {
     );
     res.status(201).json({ id: profile.id, email: profile.email });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(400).json({ error: errorMessage(err) });
   }
 });
 

@@ -10,6 +10,17 @@ function parseReservationDatesFromPurpose(purpose: string | null | undefined): {
 
 const SIGN_OUT_ACTIVE_END = new Date('9999-12-31T23:59:59.999Z');
 
+/** PostgREST errors are plain objects, so `instanceof Error` is false and routes would hide the message. */
+function throwIfDbError(
+  error: { message?: string; details?: string | null; hint?: string | null } | null | undefined
+): void {
+  if (!error) return;
+  const parts = [error.message, error.details, error.hint].filter(
+    (part): part is string => typeof part === 'string' && part.trim().length > 0
+  );
+  throw new Error(parts.join(' — ') || 'Database error');
+}
+
 export interface EquipmentType {
   id: number;
   name: string;
@@ -231,7 +242,7 @@ export class Database {
         .eq('auth_user_id', authUserId)
         .select()
         .single();
-      if (error) throw error;
+      throwIfDbError(error);
       return data as Profile;
     }
 
@@ -244,7 +255,7 @@ export class Database {
       })
       .select()
       .single();
-    if (error) throw error;
+    throwIfDbError(error);
     return data as Profile;
   }
 
@@ -256,7 +267,7 @@ export class Database {
       .from('profile_access')
       .select('site_id, department_id, equipment_id')
       .eq('profile_id', profile.id);
-    if (error) throw error;
+    throwIfDbError(error);
     if (!accessRows?.length) return []; // No access = see nothing
 
     const deptIds: number[] = [];
@@ -325,7 +336,7 @@ export class Database {
       .select('equipment_id')
       .eq('profile_id', profile.id)
       .not('equipment_id', 'is', null);
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r: { equipment_id: number }) => r.equipment_id).filter(Boolean);
   }
 
@@ -336,7 +347,7 @@ export class Database {
       if (companyId) q = q.eq('company_id', companyId);
     }
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
       company_name: (r.companies as { name: string } | null)?.name ?? null,
@@ -367,7 +378,7 @@ export class Database {
       .insert(payload)
       .select()
       .single();
-    if (error) throw error;
+    throwIfDbError(error);
     if (access.length > 0 && (profile as Profile).id) {
       let filtered = access;
       if (creatorProfile.role === 'equipment_manager' || creatorProfile.role === 'company_admin') {
@@ -387,7 +398,7 @@ export class Database {
       .from('profiles')
       .update({ role, updated_at: new Date().toISOString() })
       .eq('id', profileId);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async updateProfile(profileId: number, data: { display_name?: string | null; email?: string; company_id?: number | null }) {
@@ -396,7 +407,7 @@ export class Database {
     if (data.email !== undefined) payload.email = data.email.toLowerCase();
     if (data.company_id !== undefined) payload.company_id = data.company_id;
     const { error } = await this.supabase.from('profiles').update(payload).eq('id', profileId);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getProfileById(profileId: number): Promise<Profile | undefined> {
@@ -410,13 +421,13 @@ export class Database {
       .from('profiles')
       .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
       .eq('id', profileId);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async deleteProfile(profileId: number) {
     await this.supabase.from('profile_access').delete().eq('profile_id', profileId);
     const { error } = await this.supabase.from('profiles').delete().eq('id', profileId);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getDefaultCompanyId(): Promise<number | null> {
@@ -429,7 +440,7 @@ export class Database {
       .from('companies')
       .select('id, name, contact_name, contact_email, contact_phone, address_line1, address_line2, address_city, address_state, address_zip, subscription_level, subscription_active, subscription_activated_at')
       .order('name');
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []) as { id: number; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; address_line1?: string | null; subscription_level: number; subscription_active: boolean; subscription_activated_at: string | null }[];
   }
 
@@ -456,7 +467,7 @@ export class Database {
       if (data.subscription_active) payload.subscription_activated_at = new Date().toISOString();
     }
     const { error } = await this.supabase.from('companies').update(payload).eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async createCompany(data: {
@@ -490,7 +501,7 @@ export class Database {
       payload.subscription_activated_at = new Date().toISOString();
     }
     const { data: row, error } = await this.supabase.from('companies').insert(payload).select('id').single();
-    if (error) throw error;
+    throwIfDbError(error);
     const companyId = (row as { id: number })?.id ?? null;
     if (companyId != null) {
       await this.seedDefaultEquipmentTypes(companyId);
@@ -514,7 +525,7 @@ export class Database {
         calibration_frequency_months: d.calibration_frequency_months,
         company_id: companyId,
       });
-      if (error && !String(error.message).toLowerCase().includes('duplicate')) throw error;
+      if (error && !String(error.message).toLowerCase().includes('duplicate')) throwIfDbError(error);
     }
   }
 
@@ -562,7 +573,7 @@ export class Database {
     await this.supabase.from('departments').delete().in('site_id', siteIds.length ? siteIds : [-1]);
     await this.supabase.from('sites').delete().eq('company_id', companyId);
     const { error } = await this.supabase.from('companies').delete().eq('id', companyId);
-    if (error) throw error;
+    throwIfDbError(error);
     return { storagePaths, authUserIds };
   }
 
@@ -581,7 +592,7 @@ export class Database {
       .from('companies')
       .update(payload)
       .eq('id', companyId);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getSubscriptionOrders(companyId: number): Promise<{ id: number; amount_cents: number; plan_name: string | null; status: string; created_at: string }[]> {
@@ -603,7 +614,7 @@ export class Database {
       plan_name: data.plan_name ?? null,
       status: data.status ?? 'completed',
     });
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getSites(adminProfile?: Profile): Promise<{ id: number; name: string; company_id?: number | null; company_name?: string | null }[]> {
@@ -613,7 +624,7 @@ export class Database {
       if (companyId) q = q.eq('company_id', companyId);
     }
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r: Record<string, unknown>) => ({
       id: r.id,
       name: r.name,
@@ -626,12 +637,12 @@ export class Database {
     const payload: Record<string, unknown> = { name };
     if (companyId !== undefined) payload.company_id = companyId;
     const { error } = await this.supabase.from('sites').update(payload).eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async deleteSite(id: number) {
     const { error } = await this.supabase.from('sites').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getDepartments(adminProfile?: Profile): Promise<{ id: number; site_id: number; name: string; site_name?: string; company_name?: string | null }[]> {
@@ -640,7 +651,7 @@ export class Database {
       .select('id, site_id, name, sites(name, company_id, companies(name))')
       .order('name');
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const sites = r.sites as { name: string; company_id?: number | null; companies?: { name: string } | null } | null;
       return {
@@ -664,12 +675,12 @@ export class Database {
 
   async updateDepartment(id: number, name: string, siteId: number) {
     const { error } = await this.supabase.from('departments').update({ name, site_id: siteId }).eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async deleteDepartment(id: number) {
     const { error } = await this.supabase.from('departments').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getProfileAccess(profileId: number): Promise<{ site_id: number; department_id: number | null; equipment_id?: number | null; site_name?: string; department_name?: string }[]> {
@@ -677,7 +688,7 @@ export class Database {
       .from('profile_access')
       .select('site_id, department_id, equipment_id, sites(name), departments(name)')
       .eq('profile_id', profileId);
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r: Record<string, unknown>) => ({
       site_id: r.site_id,
       department_id: r.department_id,
@@ -697,7 +708,7 @@ export class Database {
       equipment_id: a.equipment_id ?? null,
     }));
     const { error } = await this.supabase.from('profile_access').insert(rows);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async createSite(name: string, companyId?: number | null) {
@@ -756,7 +767,7 @@ export class Database {
       .select('id, name, company_id, companies(name)')
       .in('id', siteIds)
       .order('name');
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((s: { id: number; name: string; company_id?: number | null; companies?: { name: string } | null }) => ({
       id: s.id,
       name: s.name,
@@ -784,7 +795,7 @@ export class Database {
     }
 
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r) => this.toEquipmentType(r as Record<string, unknown>));
   }
 
@@ -797,7 +808,7 @@ export class Database {
       calibration_frequency_months: data.calibration_frequency_months ?? null,
       company_id: data.company_id,
     });
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async updateEquipmentType(
@@ -821,7 +832,7 @@ export class Database {
         calibration_frequency_months: data.calibration_frequency_months !== undefined ? data.calibration_frequency_months : existing.calibration_frequency_months,
       })
       .eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async deleteEquipmentType(id: number, profile?: Profile, companyId?: number | null) {
@@ -830,10 +841,10 @@ export class Database {
       .from('equipment')
       .select('*', { count: 'exact', head: true })
       .eq('equipment_type_id', id);
-    if (countErr) throw countErr;
+    throwIfDbError(countErr);
     if ((count ?? 0) > 0) throw new Error('Cannot delete: equipment exists of this type');
     const { error } = await this.supabase.from('equipment_types').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getAllEquipment(profile?: Profile, companyId?: number | null): Promise<Equipment[]> {
@@ -862,7 +873,7 @@ export class Database {
     }
 
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const dept = r.departments as {
         name?: string;
@@ -1039,7 +1050,7 @@ export class Database {
       })
       .select('id')
       .single();
-    if (error) throw error;
+    throwIfDbError(error);
     const eqId = inserted?.id ?? 0;
     if (eqId && data.department_id) {
       await this.autoAddEquipmentToDepartmentAccess(eqId, data.department_id);
@@ -1104,7 +1115,7 @@ export class Database {
     if (data.notes !== undefined) payload.notes = data.notes;
     if (Object.keys(payload).length === 0) return;
     const { error } = await this.supabase.from('equipment').update(payload).in('id', ids);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async updateEquipment(id: number, data: Partial<{
@@ -1143,7 +1154,7 @@ export class Database {
         image_path: data.image_path !== undefined ? data.image_path : existing.image_path,
       })
       .eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async deleteEquipment(id: number) {
@@ -1152,17 +1163,17 @@ export class Database {
       .select('*', { count: 'exact', head: true })
       .eq('equipment_id', id)
       .is('signed_in_at', null);
-    if (signOutErr) throw signOutErr;
+    throwIfDbError(signOutErr);
     if ((count ?? 0) > 0) throw new Error('Cannot delete: equipment is currently signed out');
     const { error: delCal } = await this.supabase.from('calibration_records').delete().eq('equipment_id', id);
-    if (delCal) throw delCal;
+    throwIfDbError(delCal);
     const signOutIds = (await this.supabase.from('sign_outs').select('id').eq('equipment_id', id)).data?.map((s) => s.id) ?? [];
     if (signOutIds.length > 0) {
       await this.supabase.from('usage').delete().in('sign_out_id', signOutIds);
     }
     await this.supabase.from('sign_outs').delete().eq('equipment_id', id);
     const { error } = await this.supabase.from('equipment').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getCalibrationStatus(profile?: Profile, companyId?: number | null): Promise<Array<Equipment & { status: 'due' | 'due_soon' | 'ok' | 'n/a' | 'out_for_cal'; days_until_due: number | null; cal_vendor?: string | null }>> {
@@ -1204,7 +1215,7 @@ export class Database {
         equipment(make, model, serial_number, equipment_number, department_id, departments(sites(name, company_id, companies(name))))
       `)
       .order('signed_out_at', { ascending: false });
-    if (error) throw error;
+    throwIfDbError(error);
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const eq = r.equipment as {
         make: string;
@@ -1259,7 +1270,7 @@ export class Database {
       `)
       .eq('equipment_id', equipmentId)
       .order('signed_out_at', { ascending: false });
-    if (error) throw error;
+    throwIfDbError(error);
     return (data ?? []).map((r: Record<string, unknown>) => {
       const eq = r.equipment as { make: string; model: string; serial_number: string };
       return {
@@ -1313,7 +1324,7 @@ export class Database {
       .insert(payload)
       .select('id')
       .single();
-    if (error) throw error;
+    throwIfDbError(error);
     return inserted?.id ?? 0;
   }
 
@@ -1361,7 +1372,7 @@ export class Database {
       })
       .select('id')
       .single();
-    if (checkoutErr) throw checkoutErr;
+    throwIfDbError(checkoutErr);
     const checkoutId = checkoutRow?.id ?? 0;
     if (!checkoutId) throw new Error('Failed to create checkout');
 
@@ -1417,7 +1428,7 @@ export class Database {
       .from('sign_outs')
       .update(updatePayload)
       .eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
 
     // 3. If a calibration date was provided, write it back to the equipment record
     if (data.cal_date) {
@@ -1427,13 +1438,13 @@ export class Database {
         .from('equipment')
         .update(equipPayload)
         .eq('id', so.equipment_id);
-      if (eqErr) throw eqErr;
+      throwIfDbError(eqErr);
     }
   }
 
   async getUsageBySignOut(signOutId: number): Promise<Usage[]> {
     const { data, error } = await this.supabase.from('usage').select('*').eq('sign_out_id', signOutId);
-    if (error) throw error;
+    throwIfDbError(error);
     return data ?? [];
   }
 
@@ -1443,12 +1454,12 @@ export class Database {
       system_equipment: data.system_equipment,
       notes: data.notes ?? null,
     });
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async removeUsage(id: number) {
     const { error } = await this.supabase.from('usage').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getCalibrationRecords(equipmentId: number): Promise<CalibrationRecord[]> {
@@ -1457,7 +1468,7 @@ export class Database {
       .select('*')
       .eq('equipment_id', equipmentId)
       .order('uploaded_at', { ascending: false });
-    if (error) throw error;
+    throwIfDbError(error);
     return data ?? [];
   }
 
@@ -1466,7 +1477,7 @@ export class Database {
       .from('calibration_records')
       .select('*, equipment(make, model, serial_number, equipment_number, department_id, departments(sites(company_id, companies(name))))')
       .order('uploaded_at', { ascending: false });
-    if (error) throw error;
+    throwIfDbError(error);
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const eq = (r.equipment || {}) as {
         make?: string;
@@ -1525,7 +1536,7 @@ export class Database {
     if (calDate) payload.cal_date = calDate;
     if (dueDate) payload.due_date = dueDate;
     const { error } = await this.supabase.from('calibration_records').insert(payload);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async updateCalibrationRecord(id: number, data: { cal_date?: string | null; due_date?: string | null }) {
@@ -1534,7 +1545,7 @@ export class Database {
     if (data.due_date !== undefined) payload.due_date = data.due_date;
     if (Object.keys(payload).length === 0) return;
     const { error } = await this.supabase.from('calibration_records').update(payload).eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   // Equipment Requests
@@ -1653,7 +1664,7 @@ export class Database {
       .order('created_at', { ascending: false });
     if (status) q = q.eq('status', status);
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     let rows = (data ?? []).map((r: Record<string, unknown>) => this.mapEquipmentRequestRow(r));
 
     // Backfill company from requester profile when site/dept/type didn't resolve
@@ -1799,7 +1810,7 @@ export class Database {
     if (data.room_number != null) payload.room_number = data.room_number;
     if (data.department_id != null) payload.department_id = data.department_id;
     const { error } = await this.supabase.from('equipment_requests').insert(payload);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async createEquipmentRequestsBatch(data: {
@@ -1833,7 +1844,7 @@ export class Database {
       return row;
     });
     const { error } = await this.supabase.from('equipment_requests').insert(rows);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async createEquipmentRequestWithLines(data: {
@@ -1869,7 +1880,7 @@ export class Database {
     if (data.tested_equipment_type != null) header.tested_equipment_type = data.tested_equipment_type;
     if (data.system_number != null) header.system_number = data.system_number;
     const { data: inserted, error } = await this.supabase.from('equipment_requests').insert(header).select('id').single();
-    if (error) throw error;
+    throwIfDbError(error);
     const requestId = inserted?.id as number;
     if (!requestId) throw new Error('Failed to create request');
     const lineRows = data.lines.map((ln, i) => ({
@@ -1880,7 +1891,10 @@ export class Database {
       sort_order: i,
     }));
     const { error: lineErr } = await this.supabase.from('equipment_request_lines').insert(lineRows);
-    if (lineErr) throw lineErr;
+    if (lineErr) {
+      await this.supabase.from('equipment_requests').delete().eq('id', requestId);
+      throwIfDbError(lineErr);
+    }
     await this.notifyManagersNewRequest(requestId, data.requester_name, data.site_id ?? null, data.department_id ?? null);
     return requestId;
   }
@@ -1976,7 +1990,7 @@ export class Database {
         reviewed_at: new Date().toISOString(),
       })
       .eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
     if (hasLines || !req.equipment_id) {
       return { legacy: false };
     }
@@ -1997,7 +2011,7 @@ export class Database {
       .from('sign_outs')
       .select('*', { count: 'exact', head: true })
       .eq('equipment_request_line_id', lineId);
-    if (error) throw error;
+    throwIfDbError(error);
     return count ?? 0;
   }
 
@@ -2006,7 +2020,7 @@ export class Database {
       .from('equipment_request_lines')
       .select('id, quantity')
       .eq('equipment_request_id', requestId);
-    if (error) throw error;
+    throwIfDbError(error);
     if (!lines?.length) return true;
     for (const ln of lines as { id: number; quantity: number }[]) {
       const c = await this.countSignOutsForLine(ln.id);
@@ -2035,7 +2049,7 @@ export class Database {
       .from('equipment_request_lines')
       .select('id, equipment_request_id, quantity, equipment_type_id')
       .eq('equipment_request_id', requestId);
-    if (lineErr) throw lineErr;
+    throwIfDbError(lineErr);
     if (!lines?.length) throw new Error('Request has no lines');
     const lineById = new Map(
       (lines as { id: number; quantity: number; equipment_type_id: number }[]).map((l) => [l.id, l])
@@ -2091,7 +2105,7 @@ export class Database {
     }
     if (Object.keys(updates).length) {
       const { error: upErr } = await this.supabase.from('equipment_requests').update(updates).eq('id', requestId);
-      if (upErr) throw upErr;
+      throwIfDbError(upErr);
     }
   }
 
@@ -2127,7 +2141,7 @@ export class Database {
       .from('equipment_request_lines')
       .update({ quantity })
       .eq('id', lineId);
-    if (upErr) throw upErr;
+    throwIfDbError(upErr);
 
     const now = new Date().toISOString();
     const complete = await this.isRequestFullyFulfilled(requestId);
@@ -2155,7 +2169,7 @@ export class Database {
         review_comment: comment ?? null,
       })
       .eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async getNotifications(
@@ -2167,7 +2181,7 @@ export class Database {
     let q = this.supabase.from('app_notifications').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(100);
     if (unreadOnly) q = q.is('read_at', null);
     const { data, error } = await q;
-    if (error) throw error;
+    throwIfDbError(error);
     return this.filterNotificationsByCompanyScope((data ?? []) as AppNotification[], profile, companyId);
   }
 
@@ -2183,7 +2197,7 @@ export class Database {
       .update({ read_at: new Date().toISOString() })
       .eq('profile_id', profileId)
       .in('id', ids);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   async markAllNotificationsRead(profileId: number, profile?: Profile, companyId?: number | null): Promise<void> {
@@ -2238,7 +2252,7 @@ export class Database {
         equipment_request_lines(equipment_types(company_id))
       `)
       .in('id', requestIds);
-    if (error) throw error;
+    throwIfDbError(error);
 
     for (const r of reqs ?? []) {
       const row = r as {
@@ -2274,7 +2288,7 @@ export class Database {
       .single();
     if (fetchErr || !data) return null;
     const { error } = await this.supabase.from('calibration_records').delete().eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
     return data as { storage_path: string };
   }
 
@@ -2311,7 +2325,7 @@ export class Database {
     if (data.date_to !== undefined) payload.date_to = data.date_to;
     if (Object.keys(payload).length === 0) return;
     const { error } = await this.supabase.from('sign_outs').update(payload).eq('id', id);
-    if (error) throw error;
+    throwIfDbError(error);
   }
 
   /** Equipment tested: from equipment_number_to_test and/or usage.system_equipment */
@@ -2352,7 +2366,7 @@ export class Database {
       `)
       .not('equipment_number_to_test', 'is', null)
       .order('signed_out_at', { ascending: false });
-    if (directErr) throw directErr;
+    throwIfDbError(directErr);
 
     const mapEquipSite = (eq: {
       department_id?: number;
@@ -2396,7 +2410,7 @@ export class Database {
         )
       `)
       .order('id', { ascending: false });
-    if (usageErr) throw usageErr;
+    throwIfDbError(usageErr);
 
     for (const u of usageData ?? []) {
       const tested = String((u as { system_equipment?: string }).system_equipment ?? '').trim();
@@ -2481,7 +2495,7 @@ export class Database {
       `)
       .eq('equipment_number_to_test', target)
       .order('signed_out_at', { ascending: false });
-    if (fieldErr) throw fieldErr;
+    throwIfDbError(fieldErr);
 
     const { data: usageMatches, error: usageErr } = await this.supabase
       .from('usage')
@@ -2497,7 +2511,7 @@ export class Database {
         )
       `)
       .eq('system_equipment', target);
-    if (usageErr) throw usageErr;
+    throwIfDbError(usageErr);
 
     const byId = new Map<number, Record<string, unknown>>();
     for (const r of byField ?? []) {
