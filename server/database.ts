@@ -38,6 +38,7 @@ export interface Equipment {
   calibration_frequency_months?: number | null;
   department_id?: number | null;
   department_name?: string | null;
+  site_id?: number | null;
   site_name?: string | null;
   company_name?: string | null;
   company_id?: number | null;
@@ -853,7 +854,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name, calibration_frequency_months),
-        departments(name, sites(name, company_id, companies(name)))
+        departments(name, sites(id, name, company_id, companies(name)))
       `)
       .order('make')
       .order('model');
@@ -877,7 +878,7 @@ export class Database {
     let rows = (data ?? []).map((r: Record<string, unknown>) => {
       const dept = r.departments as {
         name?: string;
-        sites?: { name: string; company_id?: number | null; companies?: { name: string } | null } | null;
+        sites?: { id?: number; name: string; company_id?: number | null; companies?: { name: string } | null } | null;
       } | null;
       const companyName = dept?.sites?.companies?.name ?? null;
       return {
@@ -885,6 +886,7 @@ export class Database {
         equipment_type_name: (r.equipment_types as { name: string; calibration_frequency_months?: number | null })?.name,
         calibration_frequency_months: (r.equipment_types as { name: string; calibration_frequency_months?: number | null })?.calibration_frequency_months ?? null,
         department_name: dept?.name ?? null,
+        site_id: dept?.sites?.id ?? null,
         site_name: dept?.sites?.name ?? null,
         company_name: companyName,
         company_id: dept?.sites?.company_id ?? null,
@@ -960,7 +962,7 @@ export class Database {
       .select(`
         *,
         equipment_types(name),
-        departments(name, sites(name, company_id))
+        departments(name, sites(id, name, company_id, companies(name)))
       `)
       .or(`serial_number.eq.${trimmed},equipment_number.eq.${trimmed}`)
       .limit(1);
@@ -971,12 +973,17 @@ export class Database {
       const companyId = dept?.sites?.company_id;
       if (companyId !== profile.company_id) return undefined;
     }
-    const dept = data.departments as { name?: string; sites?: { name: string } } | null;
+    const dept = data.departments as {
+      name?: string;
+      sites?: { id?: number; name: string; company_id?: number | null; companies?: { name: string } | null } | null;
+    } | null;
     return {
       ...data,
       equipment_type_name: (data.equipment_types as { name: string })?.name,
       department_name: dept?.name ?? null,
+      site_id: dept?.sites?.id ?? null,
       site_name: dept?.sites?.name ?? null,
+      company_name: dept?.sites?.companies?.name ?? null,
       equipment_types: undefined,
       departments: undefined,
     } as Equipment;

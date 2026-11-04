@@ -15,7 +15,10 @@ export default function BulkDeleteModal({ equipmentIds, onClose, onDeleted }: Pr
   const canDelete = confirmText.trim().toLowerCase() === 'delete';
 
   const handleDelete = async () => {
-    if (!canDelete) return;
+    if (!canDelete) {
+      setError('Please type "delete" to confirm');
+      return;
+    }
     setError('');
     setDeleting(true);
     try {
@@ -49,7 +52,10 @@ export default function BulkDeleteModal({ equipmentIds, onClose, onDeleted }: Pr
           <label>Confirmation</label>
           <input
             value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
+            onChange={(e) => {
+              setConfirmText(e.target.value);
+              if (error) setError('');
+            }}
             placeholder="delete"
             autoComplete="off"
             style={{ width: '100%' }}
@@ -60,7 +66,7 @@ export default function BulkDeleteModal({ equipmentIds, onClose, onDeleted }: Pr
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={deleting}>
             Cancel
           </button>
-          <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={!canDelete || deleting}>
+          <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
             {deleting ? 'Deleting…' : 'Delete'}
           </button>
         </div>

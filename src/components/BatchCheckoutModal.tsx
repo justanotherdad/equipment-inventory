@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import BarcodeScanInput from './BarcodeScanInput';
 import { api } from '../api';
 
+type ScanStatus = 'available' | 'checked_out' | 'out_for_calibration';
+
 interface ScannedItem {
   id: number;
   equipment_type_name: string;
@@ -10,6 +12,57 @@ interface ScannedItem {
   model: string;
   serial_number: string;
   equipment_number: string | null;
+  status: ScanStatus;
+  company_name: string | null;
+  site_name: string | null;
+  site_id: number | null;
+  department_name: string | null;
+  last_calibration_date: string | null;
+  next_calibration_due: string | null;
+  notes: string | null;
+}
+
+interface BarcodeEquipment {
+  id: number;
+  equipment_type_name?: string;
+  make: string;
+  model: string;
+  serial_number: string;
+  equipment_number?: string | null;
+  company_name?: string | null;
+  site_name?: string | null;
+  site_id?: number | null;
+  department_name?: string | null;
+  last_calibration_date?: string | null;
+  next_calibration_due?: string | null;
+  notes?: string | null;
+}
+
+interface ActiveSignOut {
+  sign_out_type?: 'field_use' | 'calibration' | null;
+  purpose?: string | null;
+}
+
+const STATUS_LABELS: Record<ScanStatus, string> = {
+  available: 'Available',
+  checked_out: 'In-Use',
+  out_for_calibration: 'Out for Cal',
+};
+
+function formatCalDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const ymd = value.slice(0, 10);
+  const [y, m, d] = ymd.split('-').map((part) => parseInt(part, 10));
+  if (!y || !m || !d) return value;
+  return new Date(y, m - 1, d).toLocaleDateString();
+}
+
+function unavailableStatus(signOut: ActiveSignOut): ScanStatus {
+  if (signOut.sign_out_type === 'calibration') return 'out_for_calibration';
+  if (!signOut.sign_out_type && (signOut.purpose ?? '').toLowerCase().includes('calibration')) {
+    return 'out_for_calibration';
+  }
+  return 'checked_out';
 }
 
 interface Site {
@@ -45,33 +98,61 @@ export default function BatchCheckoutModal({ onClose, onSaved, initialItems, not
     api.sites.getAll().then(setSites).catch(() => setSites([]));
   }, []);
 
+  const applyCheckoutDefaults = (item: { site_id: number | null; equipment_number: string | null }) => {
+    if (item.site_id != null) {
+      setSiteId((current) => (current ? current : String(item.site_id)));
+    }
+    const number = item.equipment_number?.trim();
+    if (number) {
+      setEquipmentNumber((current) => (current.trim() ? current : number));
+    }
+  };
+
+  useEffect(() => {
+    const first = (initialItems ?? [])[0];
+    if (first) applyCheckoutDefaults(first);
+    // Prefill once from items already chosen. Later edits stay as the user left them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleBarcodeScan = async (barcode: string) => {
     setScanError('');
-    const equipment = await api.equipment.getByBarcode(barcode);
+    const equipment = (await api.equipment.getByBarcode(barcode)) as BarcodeEquipment | null;
     if (!equipment) {
       setScanError(`No equipment found for "${barcode}". Check serial number or equipment number.`);
       return;
     }
-    const activeSignOut = await api.signOuts.getActiveByEquipmentId(equipment.id);
+    const activeSignOut = (await api.signOuts.getActiveByEquipmentId(equipment.id)) as ActiveSignOut | null;
     if (activeSignOut) {
-      setScanError(`Equipment "${equipment.serial_number}" is already signed out.`);
+      const label = STATUS_LABELS[unavailableStatus(activeSignOut)];
+      const identity = equipment.equipment_number
+        ? `#${equipment.equipment_number}`
+        : equipment.serial_number;
+      setScanError(`Equipment ${identity} is ${label} and cannot be checked out.`);
       return;
     }
     if (scanned.some((s) => s.id === equipment.id)) {
       setScanError(`"${equipment.serial_number}" is already in the list.`);
       return;
     }
-    setScanned((prev) => [
-      ...prev,
-      {
-        id: equipment.id,
-        equipment_type_name: equipment.equipment_type_name ?? '',
-        make: equipment.make,
-        model: equipment.model,
-        serial_number: equipment.serial_number,
-        equipment_number: equipment.equipment_number ?? null,
-      },
-    ]);
+    const item: ScannedItem = {
+      id: equipment.id,
+      equipment_type_name: equipment.equipment_type_name ?? '',
+      make: equipment.make,
+      model: equipment.model,
+      serial_number: equipment.serial_number,
+      equipment_number: equipment.equipment_number ?? null,
+      status: 'available',
+      company_name: equipment.company_name ?? null,
+      site_name: equipment.site_name ?? null,
+      site_id: equipment.site_id ?? null,
+      department_name: equipment.department_name ?? null,
+      last_calibration_date: equipment.last_calibration_date ?? null,
+      next_calibration_due: equipment.next_calibration_due ?? null,
+      notes: equipment.notes ?? null,
+    };
+    setScanned((prev) => [...prev, item]);
+    applyCheckoutDefaults(item);
   };
 
   const removeItem = (id: number) => {
@@ -168,16 +249,30 @@ export default function BatchCheckoutModal({ onClose, onSaved, initialItems, not
         {scanned.length > 0 && (
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label>Scanned Equipment ({scanned.length})</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 160, overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 320, overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
               {scanned.map((s) => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'var(--bg-primary)', borderRadius: 6 }}>
-                  <span style={{ fontSize: '0.9rem' }}>
-                    {s.make} {s.model}
-                    {s.equipment_number ? ` (#${s.equipment_number})` : ` (S/N: ${s.serial_number})`}
-                  </span>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem' }} onClick={() => removeItem(s.id)}>
-                    <X size={14} />
-                  </button>
+                <div key={s.id} style={{ padding: '0.65rem 0.75rem', background: 'var(--bg-primary)', borderRadius: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                    <strong style={{ fontSize: '0.95rem' }}>
+                      {s.make} {s.model}
+                      {s.equipment_number ? ` (#${s.equipment_number})` : ''}
+                    </strong>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem' }} onClick={() => removeItem(s.id)} aria-label="Remove scanned equipment">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gap: '0.2rem' }}>
+                    <ScanDetail label="Status" value={STATUS_LABELS[s.status]} />
+                    <ScanDetail label="Equipment Type" value={s.equipment_type_name || '—'} />
+                    <ScanDetail label="Company" value={s.company_name || '—'} />
+                    <ScanDetail label="Site" value={s.site_name || '—'} />
+                    <ScanDetail label="Department" value={s.department_name || '—'} />
+                    <ScanDetail label="Serial Number" value={s.serial_number || '—'} />
+                    <ScanDetail label="Equipment Number" value={s.equipment_number ? `#${s.equipment_number}` : '—'} />
+                    <ScanDetail label="Last Calibration" value={formatCalDate(s.last_calibration_date)} />
+                    <ScanDetail label="Next Cal Due" value={formatCalDate(s.next_calibration_due)} />
+                    <ScanDetail label="Notes" value={s.notes?.trim() || '—'} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -272,6 +367,15 @@ export default function BatchCheckoutModal({ onClose, onSaved, initialItems, not
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ScanDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.85rem' }}>
+      <span style={{ color: 'var(--text-muted)', minWidth: 132, flexShrink: 0 }}>{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

@@ -17,6 +17,7 @@ interface Equipment {
   equipment_type_id?: number;
   department_id?: number | null;
   department_name?: string | null;
+  site_id?: number | null;
   site_name?: string | null;
   company_name?: string | null;
   equipment_type_name: string;
@@ -147,6 +148,7 @@ export default function EquipmentList() {
   const [heatMapFilterMake, setHeatMapFilterMake] = useState('');
   const [heatMapFilterModel, setHeatMapFilterModel] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingEquipmentId, setEditingEquipmentId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -319,6 +321,14 @@ export default function EquipmentList() {
     load();
   };
 
+  const openEditSelected = () => {
+    if (selectedIds.size === 1) {
+      setEditingEquipmentId(Array.from(selectedIds)[0]);
+      return;
+    }
+    setShowBulkModal(true);
+  };
+
   const handleBulkDeleted = () => {
     setShowBulkDeleteModal(false);
     setSelectedIds(new Set());
@@ -444,7 +454,7 @@ export default function EquipmentList() {
                 <LogOut size={18} />
                 Sign Out {selectedIds.size} selected
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
+              <button type="button" className="btn btn-secondary" onClick={openEditSelected}>
                 <Edit3 size={18} />
                 Edit {selectedIds.size} selected
               </button>
@@ -881,6 +891,18 @@ export default function EquipmentList() {
         />
       )}
 
+      {editingEquipmentId != null && (
+        <EquipmentModal
+          equipmentId={editingEquipmentId}
+          onClose={() => setEditingEquipmentId(null)}
+          onSaved={() => {
+            setEditingEquipmentId(null);
+            setSelectedIds(new Set());
+            load();
+          }}
+        />
+      )}
+
       {showImportModal && (
         <EquipmentImportModal
           onClose={() => setShowImportModal(false)}
@@ -917,6 +939,14 @@ export default function EquipmentList() {
             model: e.model,
             serial_number: e.serial_number,
             equipment_number: e.equipment_number ?? null,
+            status: 'available' as const,
+            company_name: e.company_name ?? null,
+            site_name: e.site_name ?? null,
+            site_id: e.site_id ?? null,
+            department_name: e.department_name ?? null,
+            last_calibration_date: e.last_calibration_date,
+            next_calibration_due: e.next_calibration_due,
+            notes: e.notes ?? null,
           }))}
           notice={signOutNotice || undefined}
         />
